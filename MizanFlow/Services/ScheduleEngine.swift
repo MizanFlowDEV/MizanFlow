@@ -1101,7 +1101,7 @@ class ScheduleEngine {
         }
     }
     
-    private func markInterruptionDays(_ schedule: inout WorkSchedule, startDate: Date, endDate: Date, type: WorkSchedule.InterruptionType) {
+    func markInterruptionDays(_ schedule: inout WorkSchedule, startDate: Date, endDate: Date, type: WorkSchedule.InterruptionType) {
         let dayType = convertInterruptionTypeToDayType(type)
         
         for i in 0..<schedule.days.count {

@@ -11,14 +11,27 @@ struct InterruptionSheet: View {
     @State private var showingDatePicker = false
     @State private var showingReturnDayPicker = false
     @State private var suggestModeResult: SuggestModeResult?
-    @State private var showingSuggestionAlert = false
     @State private var suggestionAlertMessage = ""
     @State private var pendingSuggestion: SuggestModeSuggestion?
     
     // NEW: State variables for loop prevention and better alternative handling
     @State private var shownSuggestionIds: Set<String> = []
-    @State private var showingBetterAlternativeAlert = false
     @State private var betterAlternative: SuggestModeSuggestion?
+    
+    // Unified alert state
+    private enum ActiveAlert: Identifiable {
+        case operationalConstraints
+        case betterAlternativeFound
+        
+        var id: Int {
+            switch self {
+            case .operationalConstraints: return 1
+            case .betterAlternativeFound: return 2
+            }
+        }
+    }
+    
+    @State private var activeAlert: ActiveAlert?
     
     // NEW: State variables for feedback messages
     @State private var feedbackMessage: String?
@@ -69,11 +82,13 @@ struct InterruptionSheet: View {
                     )
                 }
             }
-            .alert("Operational Constraints", isPresented: $showingSuggestionAlert) {
+            .confirmationDialog("Operational Constraints", isPresented: Binding(
+                get: { activeAlert == .operationalConstraints },
+                set: { if !$0 { activeAlert = nil } }
+            ), titleVisibility: .visible) {
                 Button("Accept Exception") {
-                    if let suggestion = pendingSuggestion {
-                        applySuggestion(suggestion)
-                    }
+                    guard let suggestion = pendingSuggestion else { return }
+                    applySuggestion(suggestion)
                 }
                 Button("Suggest Alternative") {
                     handleSuggestAlternative()
@@ -84,16 +99,22 @@ struct InterruptionSheet: View {
             } message: {
                 Text(suggestionAlertMessage)
             }
-            .alert("Better Alternative Found", isPresented: $showingBetterAlternativeAlert) {
-                if let better = betterAlternative {
-                    Button("Use This Alternative") {
+            .alert("Better Alternative Found", isPresented: Binding(
+                get: { activeAlert == .betterAlternativeFound },
+                set: { if !$0 { activeAlert = nil } }
+            )) {
+                Button("Use This Alternative") {
+                    if let better = betterAlternative {
                         pendingSuggestion = better
-                        showingBetterAlternativeAlert = false
-                        // User can then apply it via "Review & Apply" button
+                        activeAlert = nil // Dismiss better alternative alert
+                        // Show constraints alert for the new suggestion
+                        if let result = suggestModeResult {
+                            showOperationalAlerts(result.alerts)
+                        }
                     }
-                    Button("Keep Current", role: .cancel) {
-                        showingBetterAlternativeAlert = false
-                    }
+                }
+                Button("Keep Current", role: .cancel) {
+                    activeAlert = nil
                 }
             } message: {
                 if let better = betterAlternative, let current = pendingSuggestion {
@@ -105,6 +126,8 @@ struct InterruptionSheet: View {
                     
                     Warnings: \(better.validationWarnings.count + better.futureSimulationWarnings.count) vs \(current.validationWarnings.count + current.futureSimulationWarnings.count)
                     """)
+                } else {
+                    Text("Found a better alternative.")
                 }
             }
             .overlay(
@@ -519,17 +542,44 @@ struct InterruptionSheet: View {
     private func handleInterruptionWithSuggestMode() {
         // CRITICAL: Prevent dismissal if ANY alert is showing
         // Alerts must only dismiss via explicit user action
-        if showingSuggestionAlert || showingBetterAlternativeAlert {
+        if activeAlert != nil {
             return
         }
         
-        // FIXED: Warning gate - check all warnings before auto-applying
+        // If there's a pending suggestion that requires approval, show alert
+        if let result = suggestModeResult,
+           let suggestion = result.suggestion,
+           pendingSuggestion == nil {
+            // Check if this suggestion needs approval
+            if result.requiresUserApproval ||
+               !suggestion.validationWarnings.isEmpty ||
+               !suggestion.futureSimulationWarnings.isEmpty {
+                pendingSuggestion = suggestion
+                showOperationalAlerts(result.alerts)
+                return
+            }
+        }
+        
+        // If pending suggestion exists but no alert showing, user must have cancelled
+        // Fall through to standard handling
+        if pendingSuggestion != nil {
+            // User cancelled suggestion flow, use standard interruption
+            viewModel.handleInterruptionWithEnhancedLogic(
+                startDate: startDate,
+                endDate: endDate,
+                type: selectedType,
+                preferredReturnDay: preferredReturnDay
+            )
+            presentationMode.wrappedValue.dismiss()
+            return
+        }
+        
+        // Auto-apply only if no warnings and no approval needed
         if let result = suggestModeResult,
            let suggestion = result.suggestion,
            !result.requiresUserApproval,
            suggestion.validationWarnings.isEmpty,
            suggestion.futureSimulationWarnings.isEmpty {
-            // Only auto-apply if no warnings exist
             applySuggestion(suggestion)
         } else {
             // Fallback to standard interruption handling
@@ -539,20 +589,19 @@ struct InterruptionSheet: View {
                 type: selectedType,
                 preferredReturnDay: preferredReturnDay
             )
+            presentationMode.wrappedValue.dismiss()
         }
-        presentationMode.wrappedValue.dismiss()
     }
     
     private func applySuggestion(_ suggestion: SuggestModeSuggestion) {
-        // Apply the suggestion to the schedule
+        // Apply the suggestion to the schedule (this should set the workDays/offDays pattern)
         viewModel.applySuggestModeSuggestion(suggestion, to: &viewModel.schedule)
         
-        // Then handle the interruption normally
-        viewModel.handleInterruptionWithEnhancedLogic(
+        // Mark the interruption days without recalculating
+        viewModel.markInterruptionDaysOnly(
             startDate: startDate,
             endDate: endDate,
-            type: selectedType,
-            preferredReturnDay: preferredReturnDay
+            type: selectedType
         )
         
         presentationMode.wrappedValue.dismiss()
@@ -569,7 +618,7 @@ struct InterruptionSheet: View {
         // The alert message should only explain the constraints, not list button options
         
         suggestionAlertMessage = alertMessage
-        showingSuggestionAlert = true
+        activeAlert = .operationalConstraints
         
         // Mark current suggestion as shown to prevent loops
         if let suggestion = pendingSuggestion {
@@ -628,16 +677,21 @@ struct InterruptionSheet: View {
     }
     
     private func handleSuggestAlternative() {
-        showingSuggestionAlert = false // Dismiss current alert
+        // Mark current suggestion as shown to prevent loops
+        if let current = pendingSuggestion {
+            markSuggestionAsShown(current)
+        }
+        
+        // Dismiss current alert
+        activeAlert = nil
         
         if let result = suggestModeResult,
            let current = pendingSuggestion,
            let better = findBetterAlternative(current: current, alternatives: result.alternatives) {
-            // Mark as shown to prevent showing again
+            // Mark better alternative as shown
             markSuggestionAsShown(better)
-            // Show new alert with better alternative details
             betterAlternative = better
-            showingBetterAlternativeAlert = true
+            activeAlert = .betterAlternativeFound
         } else {
             // No better alternative available - exit suggestion flow
             exitSuggestionFlow(message: "No better suggestions available.")
@@ -651,8 +705,7 @@ struct InterruptionSheet: View {
         pendingSuggestion = nil
         
         // Dismiss all alerts
-        showingSuggestionAlert = false
-        showingBetterAlternativeAlert = false
+        activeAlert = nil
         
         // Optional: Clear shown suggestions to allow fresh start
         // clearShownSuggestions()

@@ -522,6 +522,18 @@ class WorkScheduleViewModel: ObservableObject {
         saveSchedule()
     }
     
+    func markInterruptionDaysOnly(startDate: Date, endDate: Date, type: WorkSchedule.InterruptionType) {
+        schedule.isInterrupted = true
+        schedule.interruptionStart = startDate
+        schedule.interruptionEnd = endDate
+        schedule.interruptionType = type
+        
+        // Mark days as interruption type without rescheduling
+        scheduleEngine.markInterruptionDays(&schedule, startDate: startDate, endDate: endDate, type: type)
+        
+        saveSchedule()
+    }
+    
     // MARK: - Test Suggest Mode
     
     func testSuggestMode() {
