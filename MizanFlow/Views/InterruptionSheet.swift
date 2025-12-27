@@ -18,20 +18,10 @@ struct InterruptionSheet: View {
     @State private var shownSuggestionIds: Set<String> = []
     @State private var betterAlternative: SuggestModeSuggestion?
     
-    // Unified alert state
-    private enum ActiveAlert: Identifiable {
-        case operationalConstraints
-        case betterAlternativeFound
-        
-        var id: Int {
-            switch self {
-            case .operationalConstraints: return 1
-            case .betterAlternativeFound: return 2
-            }
-        }
-    }
-    
-    @State private var activeAlert: ActiveAlert?
+    // FIXED: Use explicit dialog booleans instead of an enum + Binding(set:)
+    // The enum approach was causing the confirmationDialog to auto-dismiss / misbehave during re-renders.
+    @State private var showingOperationalConstraintsDialog: Bool = false
+    @State private var showingBetterAlternativeAlert: Bool = false
     
     // NEW: State variables for feedback messages
     @State private var feedbackMessage: String?
@@ -82,39 +72,38 @@ struct InterruptionSheet: View {
                     )
                 }
             }
-            .confirmationDialog("Operational Constraints", isPresented: Binding(
-                get: { activeAlert == .operationalConstraints },
-                set: { if !$0 { activeAlert = nil } }
-            ), titleVisibility: .visible) {
+            .confirmationDialog("Operational Constraints", isPresented: $showingOperationalConstraintsDialog, titleVisibility: .visible) {
                 Button("Accept Exception") {
-                    guard let suggestion = pendingSuggestion else { return }
+                    guard let suggestion = pendingSuggestion else {
+                        print("⚠️ No pending suggestion when Accept Exception clicked")
+                        showingOperationalConstraintsDialog = false
+                        return
+                    }
+                    print("✅ Accept Exception - Applying suggestion: \(suggestion.workDays)W/\(suggestion.offDays)O, Score: \(Int(suggestion.score))")
+                    showingOperationalConstraintsDialog = false
                     applySuggestion(suggestion)
                 }
                 Button("Suggest Alternative") {
+                    showingOperationalConstraintsDialog = false
                     handleSuggestAlternative()
                 }
                 Button("Cancel", role: .cancel) {
                     exitSuggestionFlow(message: "Suggestion cancelled. You can continue editing.")
+                    showingOperationalConstraintsDialog = false
                 }
             } message: {
                 Text(suggestionAlertMessage)
             }
-            .alert("Better Alternative Found", isPresented: Binding(
-                get: { activeAlert == .betterAlternativeFound },
-                set: { if !$0 { activeAlert = nil } }
-            )) {
+            .alert("Better Alternative Found", isPresented: $showingBetterAlternativeAlert) {
                 Button("Use This Alternative") {
                     if let better = betterAlternative {
                         pendingSuggestion = better
-                        activeAlert = nil // Dismiss better alternative alert
-                        // Show constraints alert for the new suggestion
-                        if let result = suggestModeResult {
-                            showOperationalAlerts(result.alerts)
-                        }
+                        showingBetterAlternativeAlert = false
+                        showOperationalAlerts(for: better)
                     }
                 }
                 Button("Keep Current", role: .cancel) {
-                    activeAlert = nil
+                    showingBetterAlternativeAlert = false
                 }
             } message: {
                 if let better = betterAlternative, let current = pendingSuggestion {
@@ -279,221 +268,268 @@ struct InterruptionSheet: View {
                         }
                     }
                     
-                        if let result = suggestModeResult {
-                        if let suggestion = result.suggestion {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Suggested Adjustment:")
-                                        .font(.headline)
-                                    
-                                    if !suggestion.isRecommended {
-                                        Text("⚠️ Not Recommended")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.orange)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.orange.opacity(0.2))
-                                            .cornerRadius(6)
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                
-                                Text(suggestion.description)
-                                    .font(.body)
-                                    .foregroundColor(.primary)
-                                
-                                HStack {
-                                    Text("Work Days: \(suggestion.workDays)")
-                                        .foregroundColor(.green)
-                                    Spacer()
-                                    Text("Off Days: \(suggestion.offDays)")
-                                        .foregroundColor(.blue)
-                                }
-                                
-                                // Show immediate validation warnings
-                                if !suggestion.validationWarnings.isEmpty {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("⚠️ Validation Warnings:")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.orange)
-                                        
-                                        ForEach(suggestion.validationWarnings, id: \.self) { warning in
-                                            Text("• \(warning)")
-                                                .font(.caption)
-                                                .foregroundColor(.orange)
-                                        }
-                                    }
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 4)
-                                    .background(Color.orange.opacity(0.15))
-                                    .cornerRadius(8)
-                                }
-                                
-                                // Show future simulation warnings (CRITICAL)
-                                if !suggestion.futureSimulationWarnings.isEmpty {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("⚠️ Future 14W/7O Alignment Concerns:")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.red)
-                                        
-                                        ForEach(suggestion.futureSimulationWarnings, id: \.self) { warning in
-                                            Text("• \(warning)")
-                                                .font(.caption)
-                                                .foregroundColor(.red)
-                                        }
-                                    }
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 4)
-                                    .background(Color.red.opacity(0.15))
-                                    .cornerRadius(8)
-                                }
-                                
-                                if let impact = suggestion.impactOnSalary {
-                                    Text("Salary Impact: \(impact)")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                                
-                                // Show alternatives with their warnings and scores
-                                if !result.alternatives.isEmpty {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("💡 Alternative Suggestions:")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.blue)
-                                        
-                                        ForEach(result.alternatives.indices, id: \.self) { index in
-                                            let alt = result.alternatives[index]
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                HStack {
-                                                    Text(alt.description)
-                                                        .font(.caption)
-                                                        .foregroundColor(.primary)
-                                                    
-                                                    if !alt.isRecommended {
-                                                        Text("⚠️")
-                                                            .font(.caption)
-                                                            .foregroundColor(.orange)
-                                                    }
-                                                    
-                                                    Spacer()
-                                                    
-                                                    Text("Score: \(Int(alt.score))")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                                
-                                                HStack {
-                                                    Text("\(alt.workDays) work / \(alt.offDays) off")
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
-                                                    Spacer()
-                                                    if let impact = alt.impactOnSalary {
-                                                        Text(impact)
-                                                            .font(.caption2)
-                                                            .foregroundColor(.secondary)
-                                                    }
-                                                }
-                                                
-                                                // Show warnings for alternatives
-                                                if !alt.validationWarnings.isEmpty || !alt.futureSimulationWarnings.isEmpty {
-                                                    VStack(alignment: .leading, spacing: 2) {
-                                                        if !alt.validationWarnings.isEmpty {
-                                                            ForEach(alt.validationWarnings.prefix(1), id: \.self) { warning in
-                                                                Text("⚠️ \(warning)")
-                                                                    .font(.caption2)
-                                                                    .foregroundColor(.orange)
-                                                            }
-                                                        }
-                                                        if !alt.futureSimulationWarnings.isEmpty {
-                                                            ForEach(alt.futureSimulationWarnings.prefix(1), id: \.self) { warning in
-                                                                Text("⚠️ \(warning)")
-                                                                    .font(.caption2)
-                                                                    .foregroundColor(.red)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                Button(action: {
-                                                    if alt.isRecommended {
-                                                        applySuggestion(alt)
-                                                    } else {
-                                                        pendingSuggestion = alt
-                                                        showOperationalAlerts(result.alerts)
-                                                    }
-                                                }) {
-                                                    Text(alt.isRecommended ? "Use This Alternative" : "Review & Apply (Requires Approval)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.white)
-                                                        .padding(.horizontal, 12)
-                                                        .padding(.vertical, 6)
-                                                        .background(alt.isRecommended ? Color.green : Color.orange)
-                                                        .cornerRadius(6)
-                                                }
-                                            }
-                                            .padding(8)
-                                            .background(alt.isRecommended ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
-                                            .cornerRadius(6)
-                                        }
-                                    }
-                                    .padding(.top, 8)
-                                }
-                                
-                                // FIXED: Always require approval if warnings exist
-                                if result.requiresUserApproval || !suggestion.validationWarnings.isEmpty || !suggestion.futureSimulationWarnings.isEmpty {
-                                    Button(action: {
-                                        pendingSuggestion = suggestion
-                                        showOperationalAlerts(result.alerts)
-                                    }) {
-                                        Text("Review & Apply (Requires Approval)")
-                                            .foregroundColor(.white)
-                                            .padding()
-                                            .background(Color.orange)
-                                            .cornerRadius(8)
-                                    }
-                                } else {
-                                    Button(action: {
-                                        applySuggestion(suggestion)
-                                    }) {
-                                        Text("Apply Suggestion")
-                                            .foregroundColor(.white)
-                                            .padding()
-                                            .background(Color.green)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        
-                        if !result.alerts.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("⚠️ Operational Constraints:")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.orange)
-                                
-                                ForEach(result.alerts.indices, id: \.self) { index in
-                                    Text("• \(result.alerts[index].message)")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                        .padding(.vertical, 2)
-                                }
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 4)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(8)
-                        }
+                    if let result = suggestModeResult {
+                        suggestionContentView(result: result)
                     }
                 }
             }
         }
+    }
+    
+    // MARK: - Helper Views for Suggest Mode
+    
+    @ViewBuilder
+    private func suggestionContentView(result: SuggestModeResult) -> some View {
+        if let suggestion = result.suggestion {
+            primarySuggestionView(suggestion: suggestion, result: result)
+        }
+        
+        if !result.alerts.isEmpty {
+            operationalConstraintsView(alerts: result.alerts)
+        }
+    }
+    
+    @ViewBuilder
+    private func primarySuggestionView(suggestion: SuggestModeSuggestion, result: SuggestModeResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            suggestionHeaderView(suggestion: suggestion)
+            suggestionDetailsView(suggestion: suggestion)
+            suggestionWarningsView(suggestion: suggestion)
+            
+            if let impact = suggestion.impactOnSalary {
+                Text("Salary Impact: \(impact)")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            
+            if !result.alternatives.isEmpty {
+                alternativesListView(alternatives: result.alternatives, result: result)
+            }
+            
+            suggestionActionButtons(suggestion: suggestion, result: result)
+        }
+        .padding(.vertical, 4)
+    }
+    
+    @ViewBuilder
+    private func suggestionHeaderView(suggestion: SuggestModeSuggestion) -> some View {
+        HStack {
+            Text("Suggested Adjustment:")
+                .font(.headline)
+            
+            if !suggestion.isRecommended {
+                Text("⚠️ Not Recommended")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(6)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    @ViewBuilder
+    private func suggestionDetailsView(suggestion: SuggestModeSuggestion) -> some View {
+        Text(suggestion.description)
+            .font(.body)
+            .foregroundColor(.primary)
+        
+        HStack {
+            Text("Work Days: \(suggestion.workDays)")
+                .foregroundColor(.green)
+            Spacer()
+            Text("Off Days: \(suggestion.offDays)")
+                .foregroundColor(.blue)
+        }
+    }
+    
+    @ViewBuilder
+    private func suggestionWarningsView(suggestion: SuggestModeSuggestion) -> some View {
+        if !suggestion.validationWarnings.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("⚠️ Validation Warnings:")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.orange)
+                
+                ForEach(suggestion.validationWarnings, id: \.self) { warning in
+                    Text("• \(warning)")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 4)
+            .background(Color.orange.opacity(0.15))
+            .cornerRadius(8)
+        }
+        
+        if !suggestion.futureSimulationWarnings.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("⚠️ Future 14W/7O Alignment Concerns:")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.red)
+                
+                ForEach(suggestion.futureSimulationWarnings, id: \.self) { warning in
+                    Text("• \(warning)")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 4)
+            .background(Color.red.opacity(0.15))
+            .cornerRadius(8)
+        }
+    }
+    
+    @ViewBuilder
+    private func alternativesListView(alternatives: [SuggestModeSuggestion], result: SuggestModeResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("💡 Alternative Suggestions:")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.blue)
+            
+            ForEach(Array(alternatives.enumerated()), id: \.offset) { index, alt in
+                alternativeItemView(alt: alt, result: result)
+                    .id("\(alt.workDays)-\(alt.offDays)-\(alt.targetReturnDay.rawValue)")
+            }
+        }
+        .padding(.top, 8)
+    }
+    
+    @ViewBuilder
+    private func alternativeItemView(alt: SuggestModeSuggestion, result: SuggestModeResult) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(alt.description)
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                
+                if !alt.isRecommended {
+                    Text("⚠️")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                
+                Spacer()
+                
+                Text("Score: \(Int(alt.score))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            HStack {
+                Text("\(alt.workDays) work / \(alt.offDays) off")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if let impact = alt.impactOnSalary {
+                    Text(impact)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            if !alt.validationWarnings.isEmpty || !alt.futureSimulationWarnings.isEmpty {
+                alternativeWarningsView(alt: alt)
+            }
+            
+            Button(action: {
+                if alt.isRecommended {
+                    print("✅ Direct apply (recommended): \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score))")
+                    applySuggestion(alt)
+                } else {
+                    pendingSuggestion = alt
+                    print("🎯 Selected Alternative: \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score)), Warnings: \(alt.validationWarnings.count + alt.futureSimulationWarnings.count)")
+                    showOperationalAlerts(for: alt)
+                }
+            }) {
+                Text(alt.isRecommended ? "Use This Alternative" : "Review & Apply (Requires Approval)")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(alt.isRecommended ? Color.green : Color.orange)
+                    .cornerRadius(6)
+            }
+        }
+        .padding(8)
+        .background(alt.isRecommended ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
+        .cornerRadius(6)
+    }
+    
+    @ViewBuilder
+    private func alternativeWarningsView(alt: SuggestModeSuggestion) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if !alt.validationWarnings.isEmpty {
+                ForEach(alt.validationWarnings.prefix(1), id: \.self) { warning in
+                    Text("⚠️ \(warning)")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
+            if !alt.futureSimulationWarnings.isEmpty {
+                ForEach(alt.futureSimulationWarnings.prefix(1), id: \.self) { warning in
+                    Text("⚠️ \(warning)")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func suggestionActionButtons(suggestion: SuggestModeSuggestion, result: SuggestModeResult) -> some View {
+        if result.requiresUserApproval || !suggestion.validationWarnings.isEmpty || !suggestion.futureSimulationWarnings.isEmpty {
+            Button(action: {
+                pendingSuggestion = suggestion
+                showOperationalAlerts(for: suggestion)
+            }) {
+                Text("Review & Apply (Requires Approval)")
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.orange)
+                    .cornerRadius(8)
+            }
+        } else {
+            Button(action: {
+                applySuggestion(suggestion)
+            }) {
+                Text("Apply Suggestion")
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.green)
+                    .cornerRadius(8)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func operationalConstraintsView(alerts: [OperationalAlert]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("⚠️ Operational Constraints:")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.orange)
+            
+            ForEach(alerts.indices, id: \.self) { index in
+                Text("• \(alerts[index].message)")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(.vertical, 2)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(8)
     }
     
     private var notesSection: some View {
@@ -542,7 +578,7 @@ struct InterruptionSheet: View {
     private func handleInterruptionWithSuggestMode() {
         // CRITICAL: Prevent dismissal if ANY alert is showing
         // Alerts must only dismiss via explicit user action
-        if activeAlert != nil {
+        if showingOperationalConstraintsDialog || showingBetterAlternativeAlert {
             return
         }
         
@@ -594,13 +630,25 @@ struct InterruptionSheet: View {
     }
     
     private func applySuggestion(_ suggestion: SuggestModeSuggestion) {
-        // Apply the suggestion to the schedule (this should set the workDays/offDays pattern)
-        viewModel.applySuggestModeSuggestion(suggestion, to: &viewModel.schedule)
+        // FIXED: Add logging to verify correct suggestion is being applied
+        print("""
+        🎯 InterruptionSheet.applySuggestion called:
+           Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
+           Score: \(Int(suggestion.score))
+           Is Recommended: \(suggestion.isRecommended)
+           Validation Warnings: \(suggestion.validationWarnings.count)
+           Future Warnings: \(suggestion.futureSimulationWarnings.count)
+           Interruption: \(startDate) to \(endDate)
+        """)
         
-        // Mark the interruption days without recalculating
-        viewModel.markInterruptionDaysOnly(
-            startDate: startDate,
-            endDate: endDate,
+        // Apply suggestion with interruption dates - this handles:
+        // 1. Earned off consumption inside interruption
+        // 2. Chosen suggestion cycle immediately after interruption
+        // 3. Resume standard 14W/7O after suggestion segment
+        viewModel.applySuggestModeSuggestion(
+            suggestion,
+            interruptionStart: startDate,
+            interruptionEnd: endDate,
             type: selectedType
         )
         
@@ -608,22 +656,44 @@ struct InterruptionSheet: View {
     }
     
     private func showOperationalAlerts(_ alerts: [OperationalAlert]) {
-        var alertMessage = "Operational Constraints Detected:\n\n"
-        
-        for alert in alerts {
-            alertMessage += "⚠️ \(alert.message)\n\n"
-        }
-        
-        // REMOVED: Redundant "Options:" section - buttons already show the actions
-        // The alert message should only explain the constraints, not list button options
-        
-        suggestionAlertMessage = alertMessage
-        activeAlert = .operationalConstraints
-        
-        // Mark current suggestion as shown to prevent loops
+        // Legacy helper retained (calls the new helper)
         if let suggestion = pendingSuggestion {
-            markSuggestionAsShown(suggestion)
+            showOperationalAlerts(for: suggestion)
+        } else {
+            suggestionAlertMessage = alerts.isEmpty ? "Operational Constraints Detected." : alerts.map { "⚠️ \($0.message)" }.joined(separator: "\n")
+            showingOperationalConstraintsDialog = true
         }
+    }
+
+    // FIXED: Build dialog content from the *selected suggestion*, not the primary result alerts list.
+    private func showOperationalAlerts(for suggestion: SuggestModeSuggestion) {
+        var alertMessage = "Operational Constraints Detected:\n\n"
+
+        if !suggestion.validationWarnings.isEmpty {
+            alertMessage += "Validation:\n"
+            for w in suggestion.validationWarnings {
+                alertMessage += "⚠️ \(w)\n"
+            }
+            alertMessage += "\n"
+        }
+
+        if !suggestion.futureSimulationWarnings.isEmpty {
+            alertMessage += "Future Alignment:\n"
+            for w in suggestion.futureSimulationWarnings {
+                alertMessage += "⚠️ \(w)\n"
+            }
+            alertMessage += "\n"
+        }
+
+        if suggestion.validationWarnings.isEmpty && suggestion.futureSimulationWarnings.isEmpty {
+            alertMessage += "This option requires approval based on operational rules."
+        }
+
+        suggestionAlertMessage = alertMessage
+        showingOperationalConstraintsDialog = true
+
+        // Mark suggestion as shown to prevent loops
+        markSuggestionAsShown(suggestion)
     }
     
     // MARK: - Loop Prevention Functions
@@ -682,8 +752,8 @@ struct InterruptionSheet: View {
             markSuggestionAsShown(current)
         }
         
-        // Dismiss current alert
-        activeAlert = nil
+        // Dismiss current dialog
+        showingOperationalConstraintsDialog = false
         
         if let result = suggestModeResult,
            let current = pendingSuggestion,
@@ -691,7 +761,7 @@ struct InterruptionSheet: View {
             // Mark better alternative as shown
             markSuggestionAsShown(better)
             betterAlternative = better
-            activeAlert = .betterAlternativeFound
+            showingBetterAlternativeAlert = true
         } else {
             // No better alternative available - exit suggestion flow
             exitSuggestionFlow(message: "No better suggestions available.")
@@ -705,7 +775,8 @@ struct InterruptionSheet: View {
         pendingSuggestion = nil
         
         // Dismiss all alerts
-        activeAlert = nil
+        showingOperationalConstraintsDialog = false
+        showingBetterAlternativeAlert = false
         
         // Optional: Clear shown suggestions to allow fresh start
         // clearShownSuggestions()

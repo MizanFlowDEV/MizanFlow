@@ -289,34 +289,48 @@ class ScheduleEngine {
     }
     
     /// Calculates a score for a suggestion based on warnings, ratios, and alignment
+    /// - Parameters:
+    ///   - workDays: Work days in the cycle
+    ///   - offDays: Off days in the cycle
+    ///   - validationWarnings: Immediate validation warnings
+    ///   - futureSimulationWarnings: Future alignment warnings
+    ///   - adjustmentType: Type of adjustment
+    ///   - alignsWithTargetReturnDay: Whether this cycle aligns the next 14W/7O restart with target return day
     private func calculateSuggestionScore(
         workDays: Int,
         offDays: Int,
         validationWarnings: [String],
         futureSimulationWarnings: [String],
-        adjustmentType: AdjustmentType
+        adjustmentType: AdjustmentType,
+        alignsWithTargetReturnDay: Bool = false
     ) -> Double {
-        var score = 100.0 // Start with perfect score
+        // FIXED: Start lower to allow proper differentiation between alternatives
+        var score = 70.0
         
         // Deduct points for validation warnings (more severe)
-        score -= Double(validationWarnings.count) * 15.0
+        score -= Double(validationWarnings.count) * 20.0
         
         // Deduct points for future simulation warnings (less severe but still important)
-        score -= Double(futureSimulationWarnings.count) * 10.0
+        score -= Double(futureSimulationWarnings.count) * 15.0
+        
+        // ENHANCED: Bonus for aligning next 14W/7O restart with target return day (CRITICAL)
+        if alignsWithTargetReturnDay {
+            score += 25.0 // Strong bonus for alignment
+        }
         
         // Bonus for standard 14W/7O pattern
         if workDays == 14 && offDays == 7 {
-            score += 20.0
+            score += 30.0
         }
         
         // Bonus for minor adjustments (preferred)
         switch adjustmentType {
         case .minorAdjustment:
-            score += 15.0
+            score += 10.0
         case .moderateAdjustment:
             score += 5.0
         case .cycleReconstruction:
-            score -= 10.0 // Penalty for major changes
+            score -= 15.0 // Penalty for major changes
         }
         
         // Bonus for good work/off ratio (close to 2:1)
@@ -328,7 +342,7 @@ class ScheduleEngine {
         } else if ratioDeviation < 0.5 {
             score += 5.0
         } else {
-            score -= Double(ratioDeviation) * 5.0
+            score -= Double(ratioDeviation) * 8.0
         }
         
         // Ensure score is within reasonable bounds
@@ -336,6 +350,7 @@ class ScheduleEngine {
     }
     
     /// Generates alternative suggestions when warnings are detected
+    /// ENHANCED: Now prioritizes cycles that align the next 14W/7O restart with target return day
     private func generateAlternatives(
         schedule: WorkSchedule,
         interruptionEnd: Date,
@@ -348,76 +363,117 @@ class ScheduleEngine {
         let calendar = Calendar.current
         let returnDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
         
-        // Generate alternatives with different cycle lengths that still reach target
-        let currentWeekday = calendar.component(.weekday, from: returnDate)
-        let currentDay = WorkSchedule.Weekday(rawValue: currentWeekday) ?? .monday
-        let daysToTarget = calculateDaysToTarget(from: currentDay, to: targetReturnDay)
-        
-        // Try alternative cycle combinations
-        let alternativeCycles = [
-            (workDays: 14, offDays: 7),  // Standard
-            (workDays: 13, offDays: 6),
-            (workDays: 12, offDays: 5),
-            (workDays: 11, offDays: 4),
-            (workDays: 10, offDays: 3),
-            (workDays: 9, offDays: 4),
-            (workDays: 8, offDays: 3),
+        // FIXED: Use allowed cycle set (no hardcoded "bad" cycles like 8/3)
+        let allowedCycles = [
+            (workDays: 14, offDays: 7),  // Baseline standard
+            (workDays: 13, offDays: 7),
+            (workDays: 12, offDays: 6),
+            (workDays: 11, offDays: 6),
+            (workDays: 10, offDays: 5),
+            (workDays: 9, offDays: 5),
+            (workDays: 8, offDays: 4),   // FIXED: 8W/4O not 8W/3O
+            (workDays: 7, offDays: 4),
+            (workDays: 6, offDays: 3),
+            (workDays: 5, offDays: 3),
+            (workDays: 3, offDays: 2),  // Allowed but Not Recommended
+            (workDays: 2, offDays: 1),  // Allowed but Not Recommended
         ]
         
-        for cycle in alternativeCycles {
+        // ENHANCED: Generate candidates and check which ones align next 14W/7O restart with target return day
+        for cycle in allowedCycles {
             let totalDays = cycle.workDays + cycle.offDays
             
-            // Only consider cycles that can reach target (within reasonable range)
-            if abs(totalDays - daysToTarget) <= 7 {
-                // Validate this alternative
-                let validationWarnings = validateSuggestion(
-                    workDays: cycle.workDays,
-                    offDays: cycle.offDays,
-                    schedule: schedule,
-                    interruptionEnd: interruptionEnd
-                )
-                
-                let futureWarnings = simulateFutureAlignment(
-                    workDays: cycle.workDays,
-                    offDays: cycle.offDays,
-                    schedule: schedule,
-                    interruptionEnd: interruptionEnd,
-                    targetReturnDay: targetReturnDay
-                )
-                
-                let score = calculateSuggestionScore(
-                    workDays: cycle.workDays,
-                    offDays: cycle.offDays,
-                    validationWarnings: validationWarnings,
-                    futureSimulationWarnings: futureWarnings,
-                    adjustmentType: cycle.workDays == 14 && cycle.offDays == 7 ? .minorAdjustment : .moderateAdjustment
-                )
-                
-                let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty
-                
-                // Only add if it's different from original and potentially better
-                if cycle.workDays != originalSuggestion.workDays || cycle.offDays != originalSuggestion.offDays {
-                    let alternative = SuggestModeSuggestion(
-                        adjustmentType: cycle.workDays == 14 && cycle.offDays == 7 ? .minorAdjustment : .moderateAdjustment,
-                        workDays: cycle.workDays,
-                        offDays: cycle.offDays,
-                        totalDays: totalDays,
-                        targetReturnDay: targetReturnDay,
-                        description: "Alternative: \(cycle.workDays) work + \(cycle.offDays) off days",
-                        impactOnSalary: calculateSalaryImpact(workDays: cycle.workDays, offDays: cycle.offDays),
-                        validationWarnings: validationWarnings,
-                        futureSimulationWarnings: futureWarnings,
-                        score: score,
-                        isRecommended: isRecommended
-                    )
-                    
-                    alternatives.append(alternative)
-                }
+            // Skip if identical to original suggestion
+            if cycle.workDays == originalSuggestion.workDays && cycle.offDays == originalSuggestion.offDays {
+                continue
             }
+            
+            // Calculate when the next standard 14W/7O cycle would start after this alternative
+            // After applying this cycle (workDays + offDays), the next 14W/7O cycle starts
+            let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
+            let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
+            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+            let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
+            
+            // Check if this cycle aligns the next 14W/7O restart with target return day
+            let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
+            
+            // Validate this alternative
+            let validationWarnings = validateSuggestion(
+                workDays: cycle.workDays,
+                offDays: cycle.offDays,
+                schedule: schedule,
+                interruptionEnd: interruptionEnd
+            )
+            
+            let futureWarnings = simulateFutureAlignment(
+                workDays: cycle.workDays,
+                offDays: cycle.offDays,
+                schedule: schedule,
+                interruptionEnd: interruptionEnd,
+                targetReturnDay: targetReturnDay
+            )
+            
+            // ENHANCED: Pass alignment info to scoring
+            let score = calculateSuggestionScore(
+                workDays: cycle.workDays,
+                offDays: cycle.offDays,
+                validationWarnings: validationWarnings,
+                futureSimulationWarnings: futureWarnings,
+                adjustmentType: cycle.workDays == 14 && cycle.offDays == 7 ? .minorAdjustment : .moderateAdjustment,
+                alignsWithTargetReturnDay: alignsWithTarget
+            )
+            
+            let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty && alignsWithTarget
+            
+            // ENHANCED: Update description to show alignment status
+            var description = "Alternative: \(cycle.workDays)W/\(cycle.offDays)O"
+            if alignsWithTarget {
+                // Use description property which returns localized name
+                let targetDayName = targetReturnDay.description
+                description += " (aligns next 14W/7O with \(targetDayName))"
+            }
+            
+            let alternative = SuggestModeSuggestion(
+                adjustmentType: cycle.workDays == 14 && cycle.offDays == 7 ? .minorAdjustment : .moderateAdjustment,
+                workDays: cycle.workDays,
+                offDays: cycle.offDays,
+                totalDays: totalDays,
+                targetReturnDay: targetReturnDay,
+                description: description,
+                impactOnSalary: calculateSalaryImpact(workDays: cycle.workDays, offDays: cycle.offDays),
+                validationWarnings: validationWarnings,
+                futureSimulationWarnings: futureWarnings,
+                score: score,
+                isRecommended: isRecommended
+            )
+            
+            alternatives.append(alternative)
         }
         
-        // Sort by score (highest first) and limit to top 3
-        return Array(alternatives.sorted { $0.score > $1.score }.prefix(3))
+        // Remove duplicates based on workDays/offDays combination
+        var seen = Set<String>()
+        alternatives = alternatives.filter { alt in
+            let key = "\(alt.workDays)-\(alt.offDays)"
+            if seen.contains(key) {
+                return false
+            }
+            seen.insert(key)
+            return true
+        }
+        
+        // ENHANCED: Sort by score (highest first), prioritizing alignment with target return day
+        let sorted = alternatives.sorted { first, second in
+            // First priority: alignment with target return day
+            let firstAligns = first.score > 90 && first.futureSimulationWarnings.isEmpty
+            let secondAligns = second.score > 90 && second.futureSimulationWarnings.isEmpty
+            if firstAligns != secondAligns {
+                return firstAligns
+            }
+            // Second priority: score
+            return first.score > second.score
+        }
+        return Array(sorted.prefix(4))
     }
     
     // MARK: - Suggest Mode with Operational Constraints
@@ -1120,6 +1176,156 @@ class ScheduleEngine {
             if normalizedDayDate > normalizedEnd {
                 break
             }
+        }
+    }
+    
+    // MARK: - Suggest Mode Application
+    
+    /// Applies a Suggest Mode suggestion to the schedule
+    /// This method:
+    /// 1. Marks interruption days using earned off first, then vacation
+    /// 2. Applies the chosen suggestion cycle immediately after interruption
+    /// 3. Resumes standard 14W/7O after the suggestion segment
+    func applySuggestModeSuggestion(
+        _ schedule: inout WorkSchedule,
+        suggestion: SuggestModeSuggestion,
+        interruptionStart: Date,
+        interruptionEnd: Date,
+        interruptionType: WorkSchedule.InterruptionType
+    ) {
+        let calendar = Calendar.current
+        let normalizedStart = normalizeToStartOfDay(interruptionStart)
+        let normalizedEnd = normalizeToStartOfDay(interruptionEnd)
+        
+        // Set interruption metadata
+        schedule.isInterrupted = true
+        schedule.interruptionStart = interruptionStart
+        schedule.interruptionEnd = interruptionEnd
+        schedule.interruptionType = interruptionType
+        
+        // C1: Mark interruption days correctly using earned off first
+        let (workedDays, earnedDays) = calculateWorkedAndEarnedDaysBeforeInterruption(schedule, interruptionStart: interruptionStart)
+        schedule.workedDaysBeforeInterruption = workedDays
+        schedule.earnedOffDaysBeforeInterruption = earnedDays
+        
+        // Get hitch start to determine original day types
+        let hitchStartDate = schedule.hitchStartDate ?? schedule.startDate
+        let normalizedHitchStart = normalizeToStartOfDay(hitchStartDate)
+        let interruptionDayType = convertInterruptionTypeToDayType(interruptionType)
+        
+        // Step 1: Mark all interruption days as interruption type first
+        for i in 0..<schedule.days.count {
+            let day = schedule.days[i]
+            let normalizedDayDate = normalizeToStartOfDay(day.date)
+            
+            if normalizedDayDate >= normalizedStart && normalizedDayDate <= normalizedEnd {
+                schedule.days[i].type = interruptionDayType
+                schedule.days[i].notes = "Interruption day"
+                schedule.days[i].isOverride = false
+            }
+            
+            if normalizedDayDate > normalizedEnd {
+                break
+            }
+        }
+        
+        // Step 2: Apply earned off days first (only to originally workdays)
+        var remainingEarnedDays = earnedDays
+        for i in 0..<schedule.days.count {
+            let day = schedule.days[i]
+            let normalizedDayDate = normalizeToStartOfDay(day.date)
+            
+            if normalizedDayDate >= normalizedStart && normalizedDayDate <= normalizedEnd {
+                // Determine if this day was originally a workday using the hitch pattern
+                let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDayDate).day ?? 0
+                let dayInCycle = (daysSinceHitchStart % 21 + 21) % 21 // Ensure positive
+                
+                // Only apply earned off to originally workdays (days 0-13 in cycle)
+                if dayInCycle < 14 && remainingEarnedDays > 0 {
+                    schedule.days[i].type = .earnedOffDay
+                    schedule.days[i].notes = "Earned off day due to work before interruption"
+                    schedule.days[i].isOverride = false
+                    remainingEarnedDays -= 1
+                }
+                // Days that were originally off days (days 14-20) remain as interruption type
+            }
+            
+            if normalizedDayDate > normalizedEnd {
+                break
+            }
+        }
+        
+        // C2: Apply the chosen suggestion cycle immediately after interruption
+        let resumeDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
+        guard let resumeIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: resumeDate) }) else {
+            print("⚠️ Could not find resume date in schedule")
+            return
+        }
+        
+        var currentIndex = resumeIndex
+        
+        // Apply work days from suggestion
+        for _ in 0..<suggestion.workDays {
+            if currentIndex < schedule.days.count {
+                schedule.days[currentIndex].type = .workday
+                schedule.days[currentIndex].notes = "Suggest Mode: \(suggestion.workDays)W/\(suggestion.offDays)O cycle"
+                schedule.days[currentIndex].isOverride = false
+                schedule.days[currentIndex].isInHitch = true
+                currentIndex += 1
+            }
+        }
+        
+        // Apply off days from suggestion
+        for _ in 0..<suggestion.offDays {
+            if currentIndex < schedule.days.count {
+                schedule.days[currentIndex].type = .earnedOffDay
+                schedule.days[currentIndex].notes = "Suggest Mode: \(suggestion.workDays)W/\(suggestion.offDays)O cycle"
+                schedule.days[currentIndex].isOverride = false
+                schedule.days[currentIndex].isInHitch = false
+                currentIndex += 1
+            }
+        }
+        
+        // C3: Resume standard 14W/7O after the suggestion segment
+        if currentIndex < schedule.days.count {
+            applyStandard14_7Pattern(&schedule, startingFrom: currentIndex)
+        }
+        
+        // ENHANCED: Log instrumentation for verification
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .none
+        
+        let totalInterruptionDays = (calendar.dateComponents([.day], from: interruptionStart, to: interruptionEnd).day ?? 0) + 1
+        let earnedOffUsed = earnedDays - remainingEarnedDays
+        let vacationUsed = max(0, totalInterruptionDays - earnedOffUsed)
+        
+        // Verify the applied segment matches the suggestion
+        var appliedWorkDays = 0
+        var appliedOffDays = 0
+        for i in resumeIndex..<min(resumeIndex + suggestion.workDays + suggestion.offDays, schedule.days.count) {
+            if schedule.days[i].type == .workday {
+                appliedWorkDays += 1
+            } else if schedule.days[i].type == .earnedOffDay {
+                appliedOffDays += 1
+            }
+        }
+        
+        print("""
+        ✅ Suggest Mode Applied:
+           Selected: \(suggestion.workDays)W/\(suggestion.offDays)O
+           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
+           Earned Off Used: \(earnedOffUsed)
+           Vacation Used: \(vacationUsed)
+           Applied Segment Start: \(dateFormatter.string(from: resumeDate))
+           Applied Segment: \(suggestion.workDays) work, \(suggestion.offDays) off
+           Verified Applied: \(appliedWorkDays) work, \(appliedOffDays) off ✅
+           Standard 14W/7O resumes from index \(currentIndex)
+        """)
+        
+        // Verify the pattern matches
+        if appliedWorkDays != suggestion.workDays || appliedOffDays != suggestion.offDays {
+            print("⚠️ WARNING: Applied pattern (\(appliedWorkDays)W/\(appliedOffDays)O) does not match selected (\(suggestion.workDays)W/\(suggestion.offDays)O)")
         }
     }
     

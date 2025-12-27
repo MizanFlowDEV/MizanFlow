@@ -497,28 +497,36 @@ class WorkScheduleViewModel: ObservableObject {
         )
     }
     
-    func applySuggestModeSuggestion(_ suggestion: SuggestModeSuggestion, to schedule: inout WorkSchedule) {
-        // Apply the suggestion to the schedule based on the adjustment type
-        switch suggestion.adjustmentType {
-        case .minorAdjustment:
-            // Apply minor adjustments by shifting the schedule
-            // This is handled by the existing interruption logic
-            logger.debug("Applying minor adjustment: \(suggestion.description, privacy: .public)")
-        case .moderateAdjustment:
-            // Apply moderate adjustments with variable cycle length
-            logger.debug("Applying moderate adjustment: \(suggestion.description, privacy: .public)")
-            
-            // The actual application would be handled by the flexible rescheduling logic
-            // which is already implemented in the ScheduleEngine
-        case .cycleReconstruction:
-            // Apply complete cycle reconstruction
-            logger.debug("Applying cycle reconstruction: \(suggestion.description, privacy: .public)")
-            
-            // This would trigger a complete schedule rebuild starting from the return date
-            // with the new cycle parameters
-        }
+    // FIXED: New method signature that properly applies suggestion
+    func applySuggestModeSuggestion(
+        _ suggestion: SuggestModeSuggestion,
+        interruptionStart: Date,
+        interruptionEnd: Date,
+        type: WorkSchedule.InterruptionType
+    ) {
+        // Log selected suggestion for verification
+        logger.debug("""
+        🎯 Applying Suggest Mode Suggestion:
+           Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
+           Interruption: \(interruptionStart, privacy: .public) to \(interruptionEnd, privacy: .public)
+           Type: \(type.rawValue, privacy: .public)
+        """)
         
-        // Save the updated schedule
+        scheduleEngine.applySuggestModeSuggestion(
+            &schedule,
+            suggestion: suggestion,
+            interruptionStart: interruptionStart,
+            interruptionEnd: interruptionEnd,
+            interruptionType: type
+        )
+        
+        saveSchedule()
+    }
+    
+    // Legacy method kept for backward compatibility (but should not be used in Suggest Mode)
+    func applySuggestModeSuggestion(_ suggestion: SuggestModeSuggestion, to schedule: inout WorkSchedule) {
+        // This is a stub - the real implementation is in the new method above
+        logger.warning("⚠️ Legacy applySuggestModeSuggestion called - this should not be used in Suggest Mode flow")
         saveSchedule()
     }
     
