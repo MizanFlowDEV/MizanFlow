@@ -1,0 +1,75 @@
+// Tab Bar
+"Schedule" = "Schedule";
+"Salary" = "Salary";
+"Budget" = "Budget";
+"Settings" = "Settings";
+
+// Settings
+"Language" = "Language";
+"Theme" = "Theme";
+"Notifications" = "Notifications";
+"Enable Notifications" = "Enable Notifications";
+"Low Off Days Threshold" = "Low Off Days Threshold";
+"Days" = "Days";
+"About" = "About";
+"Version" = "Version";
+"Build" = "Build";
+"Copyright" = "Copyright";
+"Export Settings" = "Export Settings";
+"Select Language" = "Select Language";
+"Select Theme" = "Select Theme";
+"Cancel" = "Cancel";
+"Done" = "Done";
+"Off" = "Off";
+
+// Schedule
+"Set Hitch Start Date" = "Set Hitch Start Date";
+"14/7 Hitch" = "14/7 Hitch";
+"Select Month" = "Select Month";
+"Month" = "Month";
+"Regular Working Day" = "Regular Working Day";
+"Earned Off Day" = "Earned Off Day";
+"Leave/Vacation" = "Leave/Vacation";
+"Training Day" = "Training Day";
+"Eid Holiday" = "Eid Holiday";
+"National Day" = "National Day";
+"Founding Day" = "Founding Day";
+"Rescheduled Day" = "Rescheduled Day";
+"Company Off" = "Company Off";
+"Remote Assignment" = "Remote Assignment";
+"Ramadan" = "Ramadan";
+"Non-Hitch Day" = "Non-Hitch Day";
+"Manual Override" = "Manual Override";
+"Active Interruption" = "Active Interruption";
+"Select Return Day" = "Select Return Day";
+"Specify Preferred Return Day" = "Specify Preferred Return Day";
+"Schedule Interruption" = "Schedule Interruption";
+"Return Preferences" = "Return Preferences";
+
+// Salary
+"Base Salary" = "Base Salary";
+"Monthly Base" = "Monthly Base";
+"Enter base salary" = "Enter base salary";
+"Allowances" = "Allowances";
+"Total Income" = "Total Income";
+"Total Deductions" = "Total Deductions";
+"Net Pay" = "Net Pay";
+
+// Budget
+"Category Breakdown" = "Category Breakdown";
+"Add Entry" = "Add Entry";
+"Description" = "Description";
+"Amount" = "Amount";
+"Category" = "Category";
+"Is Income" = "Is Income";
+"Notes (Optional)" = "Notes (Optional)";
+"Entry Details" = "Entry Details";
+"Edit Entry" = "Edit Entry";
+"Delete Entry" = "Delete Entry";
+"Save" = "Save";
+
+// Language Change Alert
+"Language Changed" = "Language Changed";
+"The app needs to restart to apply the new language. Would you like to restart now?" = "The app needs to restart to apply the new language. Would you like to restart now?";
+"Restart Now" = "Restart Now";
+"Later" = "Later"; 

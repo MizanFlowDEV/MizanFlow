@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="24.3.0" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="ScheduleEntity" representedClassName="ScheduleEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="endDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="hitchStartDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="interruptionEnd" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="interruptionStart" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="interruptionType" optional="YES" attributeType="String"/>
+        <attribute name="isInterrupted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="manuallyAdjusted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="preferredReturnDay" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="vacationBalance" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
+        <relationship name="days" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ScheduleDayEntity" inverseName="schedule" inverseEntity="ScheduleDayEntity"/>
+    </entity>
+    <entity name="ScheduleDayEntity" representedClassName="ScheduleDayEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="hasIcon" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="iconName" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isInHitch" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="isOverride" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isRemote" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="overtimeHours" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <relationship name="schedule" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ScheduleEntity" inverseName="days" inverseEntity="ScheduleEntity"/>
+    </entity>
+    <entity name="SalaryBreakdownEntity" representedClassName="SalaryBreakdownEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="adlHours" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="baseSalary" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="esppPercentage" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <attribute name="homeLoanPercentage" attributeType="Double" defaultValueString="25.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isRemote" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="month" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="overtimeHours" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="specialOperationsPercentage" attributeType="Double" defaultValueString="5.0" usesScalarValueType="YES"/>
+        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AdditionalEntryEntity" inverseName="salaryBreakdown" inverseEntity="AdditionalEntryEntity"/>
+    </entity>
+    <entity name="AdditionalEntryEntity" representedClassName="AdditionalEntryEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="entryDescription" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isIncome" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <relationship name="salaryBreakdown" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SalaryBreakdownEntity" inverseName="entries" inverseEntity="SalaryBreakdownEntity"/>
+    </entity>
+</model>

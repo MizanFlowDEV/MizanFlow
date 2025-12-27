@@ -1,0 +1,79 @@
+// Tab Bar
+"Schedule" = "الجدول";
+"Salary" = "الراتب";
+"Budget" = "الميزانية";
+"Settings" = "الإعدادات";
+
+// Settings
+"Language" = "اللغة";
+"Theme" = "المظهر";
+"Notifications" = "الإشعارات";
+"Enable Notifications" = "تفعيل الإشعارات";
+"Low Off Days Threshold" = "حد الأيام القليلة";
+"Days" = "أيام";
+"About" = "حول";
+"Version" = "الإصدار";
+"Build" = "البناء";
+"Copyright" = "حقوق النشر";
+"Export Settings" = "تصدير الإعدادات";
+"Select Language" = "اختر اللغة";
+"Select Theme" = "اختر المظهر";
+"Cancel" = "إلغاء";
+"Done" = "تم";
+
+// Schedule
+"Set Hitch Start Date" = "تعيين تاريخ بداية الدورة";
+"14/7 Hitch" = "دورة ١٤/٧";
+"Select Month" = "اختر الشهر";
+"Month" = "الشهر";
+"Regular Working Day" = "يوم عمل عادي";
+"Earned Off Day" = "يوم راحة مكتسب";
+"Leave/Vacation" = "إجازة";
+"Training Day" = "يوم تدريب";
+"Eid Holiday" = "عيد";
+"National Day" = "اليوم الوطني";
+"Founding Day" = "يوم التأسيس";
+"Rescheduled Day" = "يوم معاد";
+"Company Off" = "عطلة الشركة";
+"Remote Assignment" = "عمل عن بعد";
+"Ramadan" = "رمضان";
+"Non-Hitch Day" = "يوم خارج الدورة";
+"Manual Override" = "تعديل يدوي";
+"Active Interruption" = "انقطاع نشط";
+"Work" = "عمل";
+"14/7 Hitch Pattern" = "نمط دورة ١٤/٧";
+
+// Salary
+"Base Salary" = "الراتب الأساسي";
+"Monthly Base" = "الأساس الشهري";
+"Enter base salary" = "أدخل الراتب الأساسي";
+"Allowances" = "البدلات";
+"Total Income" = "إجمالي الدخل";
+"Total Deductions" = "إجمالي الخصومات";
+"Net Pay" = "صافي الراتب";
+
+// Budget
+"Category Breakdown" = "تفصيل الفئات";
+"Add Entry" = "إضافة قيد";
+"Description" = "الوصف";
+"Amount" = "المبلغ";
+"Category" = "الفئة";
+"Is Income" = "دخل";
+"Notes (Optional)" = "ملاحظات (اختياري)";
+"Entry Details" = "تفاصيل القيد";
+"Edit Entry" = "تعديل القيد";
+"Delete Entry" = "حذف القيد";
+"Save" = "حفظ";
+
+// Language change alert
+"Language Changed" = "تم تغيير اللغة";
+"The app needs to restart to apply the new language. Would you like to restart now?" = "يجب إعادة تشغيل التطبيق لتطبيق اللغة الجديدة. هل تريد إعادة التشغيل الآن؟";
+"Restart Now" = "إعادة التشغيل الآن";
+"Later" = "لاحقاً";
+"Off" = "عطلة";
+
+// Interruption sheet
+"Select Return Day" = "اختر يوم العودة";
+"Specify Preferred Return Day" = "تحديد يوم العودة المفضل";
+"Schedule Interruption" = "انقطاع الجدول";
+"Return Preferences" = "تفضيلات العودة"; 

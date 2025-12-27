@@ -1,0 +1,219 @@
+import Foundation
+import SwiftUI
+
+@MainActor
+class SalaryViewModel: ObservableObject {
+    @Published var salaryBreakdown: SalaryBreakdown
+    @Published var selectedMonth: Date = Date()
+    @Published var showingAddIncomeSheet = false
+    @Published var showingAddDeductionSheet = false
+    @Published var showingEditPercentagesSheet = false
+    
+    private let salaryEngine = SalaryEngine.shared
+    private let dataService = DataPersistenceService.shared
+    private let scheduleEngine = ScheduleEngine.shared
+    private let alertService = SmartAlertService.shared
+    
+    // Store the current schedule
+    private var currentSchedule: WorkSchedule?
+    
+    init(baseSalary: Double = 0) {
+        self.salaryBreakdown = SalaryBreakdown(baseSalary: baseSalary, month: Date())
+        loadScheduleAndRecalculate(for: Date())
+    }
+    
+    private func loadScheduleAndRecalculate(for month: Date) {
+        PerformanceMonitor.shared.measure("load_schedule_recalculate") {
+            // Try to load all schedules and find the one that contains this month
+            let calendar = Calendar.current
+            let components = calendar.dateComponents([.year, .month], from: month)
+            guard let monthStart = calendar.date(from: components),
+                  let _ = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) else {
+                return
+            }
+            
+            // Load or generate schedule
+            let schedule: WorkSchedule
+            if let existingSchedule = dataService.loadLatestSchedule(),
+               existingSchedule.hitchStartDate != nil {
+                schedule = existingSchedule
+            } else {
+                // If no valid schedule found or no hitch start date, generate a new one
+                var newSchedule = scheduleEngine.generateSchedule(from: monthStart)
+                // Set March 3rd as the hitch start date
+                let hitchStartComponents = DateComponents(year: 2025, month: 3, day: 3)
+                newSchedule.hitchStartDate = calendar.date(from: hitchStartComponents)
+                dataService.saveSchedule(newSchedule)
+                schedule = newSchedule
+            }
+            
+            self.currentSchedule = schedule
+            
+            // Recalculate salary breakdown for the selected month
+            let newBreakdown = salaryEngine.calculateSalary(for: schedule, baseSalary: salaryBreakdown.baseSalary, month: monthStart)
+            salaryBreakdown.month = monthStart
+            salaryBreakdown.overtimeHours = newBreakdown.overtimeHours
+            salaryBreakdown.adlHours = newBreakdown.adlHours
+            
+            objectWillChange.send()
+        }
+    }
+    
+    func saveSalary() {
+        dataService.saveSalaryBreakdown(salaryBreakdown)
+        HapticFeedback.saveSuccess()
+    }
+    
+    func updateBaseSalary(_ newSalary: Double) {
+        let validation = ValidationUtilities.validateSalary(newSalary)
+        guard validation.isValid else {
+            // In a real app, show error to user
+            AppLogger.viewModel.warning("Invalid salary: \(validation.errorMessage ?? "Unknown error", privacy: .public)")
+            return
+        }
+        salaryBreakdown.baseSalary = newSalary
+        saveSalary()
+        checkSalaryChanges()
+    }
+    
+    func updateMonth(_ newMonth: Date) {
+        selectedMonth = newMonth
+        loadScheduleAndRecalculate(for: newMonth)
+        saveSalary()
+    }
+    
+    func addAdditionalIncome(description: String, amount: Double, notes: String? = nil) {
+        let descriptionValidation = ValidationUtilities.validateNonEmptyString(description, fieldName: NSLocalizedString("Description", comment: "Description field"))
+        let amountValidation = ValidationUtilities.validateAmount(amount)
+        
+        guard descriptionValidation.isValid && amountValidation.isValid else {
+            AppLogger.viewModel.warning("Invalid income entry: \(descriptionValidation.errorMessage ?? amountValidation.errorMessage ?? "Unknown error", privacy: .public)")
+            return
+        }
+        
+        let sanitizedDescription = ValidationUtilities.sanitizeString(description)
+        let sanitizedNotes = notes.map { ValidationUtilities.sanitizeString($0) }
+        
+        salaryEngine.addAdditionalIncome(&salaryBreakdown, description: sanitizedDescription, amount: amount, notes: sanitizedNotes)
+        saveSalary()
+        checkSalaryChanges()
+    }
+    
+    func addCustomDeduction(description: String, amount: Double, notes: String? = nil) {
+        let descriptionValidation = ValidationUtilities.validateNonEmptyString(description, fieldName: NSLocalizedString("Description", comment: "Description field"))
+        let amountValidation = ValidationUtilities.validateAmount(amount)
+        
+        guard descriptionValidation.isValid && amountValidation.isValid else {
+            AppLogger.viewModel.warning("Invalid deduction entry: \(descriptionValidation.errorMessage ?? amountValidation.errorMessage ?? "Unknown error", privacy: .public)")
+            return
+        }
+        
+        let sanitizedDescription = ValidationUtilities.sanitizeString(description)
+        let sanitizedNotes = notes.map { ValidationUtilities.sanitizeString($0) }
+        
+        salaryEngine.addCustomDeduction(&salaryBreakdown, description: sanitizedDescription, amount: amount, notes: sanitizedNotes)
+        saveSalary()
+        checkSalaryChanges()
+    }
+    
+    func updateDeductionPercentages(homeLoan: Double, espp: Double) {
+        let homeLoanValidation = ValidationUtilities.validateHomeLoanPercentage(homeLoan)
+        let esppValidation = ValidationUtilities.validateESPPPercentage(espp)
+        
+        guard homeLoanValidation.isValid && esppValidation.isValid else {
+            AppLogger.viewModel.warning("Invalid deduction percentages: \(homeLoanValidation.errorMessage ?? esppValidation.errorMessage ?? "Unknown error", privacy: .public)")
+            return
+        }
+        
+        salaryEngine.updateDeductionPercentages(&salaryBreakdown, homeLoan: homeLoan, espp: espp)
+        saveSalary()
+        checkSalaryChanges()
+    }
+    
+    func updateSpecialOperationsPercentage(_ percentage: Double) {
+        let validation = ValidationUtilities.validateSpecialOperationsPercentage(percentage)
+        guard validation.isValid else {
+            AppLogger.viewModel.warning("Invalid special operations percentage: \(validation.errorMessage ?? "Unknown error", privacy: .public)")
+            return
+        }
+        salaryEngine.updateSpecialOperationsPercentage(&salaryBreakdown, percentage: percentage)
+        saveSalary()
+        checkSalaryChanges()
+    }
+    
+    private func checkSalaryChanges() {
+        // In a real app, you would compare with the previous month's salary
+        // For now, we'll just check if the current salary is significantly different from the base
+        // Using underscore to silence the unused variable warning
+        _ = ((salaryBreakdown.totalCompensation - salaryBreakdown.baseSalary) / salaryBreakdown.baseSalary) * 100
+        alertService.checkSalaryChanges(salaryBreakdown.totalCompensation, previousSalary: salaryBreakdown.baseSalary)
+    }
+    
+    // MARK: - Formatting Methods
+    
+    func formatCurrency(_ amount: Double) -> String {
+        return FormattingUtilities.formatCurrency(amount)
+    }
+    
+    func formatPercentage(_ value: Double) -> String {
+        return FormattingUtilities.formatPercentage(value)
+    }
+    
+    func formatMonth(_ date: Date) -> String {
+        return FormattingUtilities.formatMonth(date)
+    }
+    
+    // MARK: - Calculation Methods
+    
+    var totalAllowances: Double {
+        salaryBreakdown.totalAllowances
+    }
+    
+    var totalDeductions: Double {
+        salaryBreakdown.totalDeductions
+    }
+    
+    var totalCompensation: Double {
+        salaryBreakdown.totalCompensation
+    }
+    
+    var netPay: Double {
+        salaryBreakdown.netPay
+    }
+    
+    var overtimePay: Double {
+        salaryBreakdown.overtimePay
+    }
+    
+    var adlPay: Double {
+        salaryBreakdown.adlPay
+    }
+    
+    var remoteAllowance: Double {
+        salaryBreakdown.remoteAllowance
+    }
+    
+    var specialOperationsAllowance: Double {
+        salaryBreakdown.specialOperationsAllowance
+    }
+    
+    var transportationAllowance: Double {
+        salaryBreakdown.transportationAllowance
+    }
+    
+    var homeLoanDeduction: Double {
+        salaryBreakdown.homeLoanDeduction
+    }
+    
+    var esppDeduction: Double {
+        salaryBreakdown.esppDeduction
+    }
+    
+    var gosiDeduction: Double {
+        salaryBreakdown.gosiDeduction
+    }
+    
+    var sanidDeduction: Double {
+        salaryBreakdown.sanidDeduction
+    }
+} 
