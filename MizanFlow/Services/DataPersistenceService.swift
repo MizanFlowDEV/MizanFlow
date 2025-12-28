@@ -61,7 +61,70 @@ class DataPersistenceService {
     // MARK: - Schedule Operations
     
     func saveSchedule(_ schedule: WorkSchedule) {
-        let scheduleEntity = ScheduleEntity(context: context)
+        // #region agent log
+        let logEntry = "{\"location\":\"DataPersistenceService.swift:63\",\"message\":\"saveSchedule ENTRY\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"hitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
+        if let data = logEntry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
+        
+        // Check if schedule already exists
+        let request: NSFetchRequest<ScheduleEntity> = ScheduleEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", schedule.id as CVarArg)
+        request.fetchLimit = 1
+        
+        var scheduleEntity: ScheduleEntity
+        var isNewEntity = false
+        if let existingEntity = try? context.fetch(request).first {
+            scheduleEntity = existingEntity
+            // #region agent log
+            let logUpdate = "{\"location\":\"DataPersistenceService.swift:check\",\"message\":\"Found existing entity - UPDATING\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"oldHitchStartDate\":\"\(existingEntity.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"newHitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
+            if let data = logUpdate.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
+            
+            // Delete old days before updating
+            if let oldDays = existingEntity.days as? Set<ScheduleDayEntity> {
+                for day in oldDays {
+                    context.delete(day)
+                }
+            }
+        } else {
+            scheduleEntity = ScheduleEntity(context: context)
+            isNewEntity = true
+            // #region agent log
+            let logNew = "{\"location\":\"DataPersistenceService.swift:check\",\"message\":\"Creating NEW entity\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"hitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
+            if let data = logNew.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
+        }
+        
         scheduleEntity.id = schedule.id
         scheduleEntity.startDate = schedule.startDate
         scheduleEntity.endDate = schedule.endDate
@@ -89,6 +152,21 @@ class DataPersistenceService {
             dayEntity.schedule = scheduleEntity
         }
         
+        // #region agent log
+        let logExit = "{\"location\":\"DataPersistenceService.swift:155\",\"message\":\"saveSchedule EXIT\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"isNewEntity\":\(isNewEntity),\"savedHitchStartDate\":\"\(scheduleEntity.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
+        if let data = logExit.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
+        
         saveContext()
     }
     
@@ -96,7 +174,25 @@ class DataPersistenceService {
         let bgContext = self.backgroundContext
         bgContext.perform { [weak self] in
             guard self != nil else { return }
-            let scheduleEntity = ScheduleEntity(context: bgContext)
+            
+            // Check if schedule already exists
+            let request: NSFetchRequest<ScheduleEntity> = ScheduleEntity.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", schedule.id as CVarArg)
+            request.fetchLimit = 1
+            
+            var scheduleEntity: ScheduleEntity
+            if let existingEntity = try? bgContext.fetch(request).first {
+                scheduleEntity = existingEntity
+                // Delete old days before updating
+                if let oldDays = existingEntity.days as? Set<ScheduleDayEntity> {
+                    for day in oldDays {
+                        bgContext.delete(day)
+                    }
+                }
+            } else {
+                scheduleEntity = ScheduleEntity(context: bgContext)
+            }
+            
             scheduleEntity.id = schedule.id
             scheduleEntity.startDate = schedule.startDate
             scheduleEntity.endDate = schedule.endDate
@@ -167,7 +263,12 @@ class DataPersistenceService {
     
     func loadLatestSchedule() -> WorkSchedule? {
         let request: NSFetchRequest<ScheduleEntity> = ScheduleEntity.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(key: "startDate", ascending: false)]
+        // Sort by endDate descending (most recent/complete schedule first), then by startDate descending
+        // This ensures we get the most complete schedule, and if multiple exist, the one with the latest start date
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "endDate", ascending: false),
+            NSSortDescriptor(key: "startDate", ascending: false)
+        ]
         request.fetchLimit = 1
         request.includesPropertyValues = true
         request.returnsObjectsAsFaults = false
@@ -175,6 +276,22 @@ class DataPersistenceService {
         
         do {
             let results = try context.fetch(request)
+            
+            // #region agent log
+            let logLoad = "{\"location\":\"DataPersistenceService.swift:168\",\"message\":\"loadLatestSchedule result\",\"data\":{\"resultCount\":\(results.count),\"scheduleId\":\"\(results.first?.id?.uuidString ?? "nil")\",\"hitchStartDate\":\"\(results.first?.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"startDate\":\"\(results.first?.startDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n"
+            if let data = logLoad.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
+            
             guard let scheduleEntity = results.first else { return nil }
             
             var schedule = convertToWorkSchedule(from: scheduleEntity)

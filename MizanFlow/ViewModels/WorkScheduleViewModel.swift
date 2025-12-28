@@ -429,19 +429,79 @@ class WorkScheduleViewModel: ObservableObject {
     }
     
     func setHitchStartDate(_ date: Date) {
+        // #region agent log
+        let logEntry = "{\"location\":\"WorkScheduleViewModel.swift:431\",\"message\":\"setHitchStartDate ENTRY\",\"data\":{\"newDate\":\"\(date.formatted(date: .abbreviated, time: .omitted))\",\"scheduleId\":\"\(schedule.id.uuidString)\",\"oldHitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n"
+        if let data = logEntry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
+        
         self.hitchStartDate = date
         self.schedule.hitchStartDate = date
         
         // Perform heavy schedule generation in background
         Task { @MainActor in
+            // Preserve the existing schedule ID so we update the same schedule entity
+            let existingScheduleId = self.schedule.id
+            
             // Create a new schedule from this hitch start date
             let scheduleEngine = self.scheduleEngine
-            self.schedule = await Task.detached(priority: .userInitiated) {
+            var newSchedule = await Task.detached(priority: .userInitiated) {
                 scheduleEngine.generateSchedule(from: date, hitchStartDate: date)
             }.value
             
+            // Preserve the existing schedule ID and other important properties
+            newSchedule.id = existingScheduleId
+            newSchedule.hitchStartDate = date  // CRITICAL: Set hitchStartDate on the new schedule
+            newSchedule.isInterrupted = self.schedule.isInterrupted
+            newSchedule.interruptionStart = self.schedule.interruptionStart
+            newSchedule.interruptionEnd = self.schedule.interruptionEnd
+            newSchedule.interruptionType = self.schedule.interruptionType
+            newSchedule.vacationBalance = self.schedule.vacationBalance
+            newSchedule.manuallyAdjusted = self.schedule.manuallyAdjusted
+            
+            // #region agent log
+            let logAfterSet = "{\"location\":\"WorkScheduleViewModel.swift:470\",\"message\":\"After setting hitchStartDate on newSchedule\",\"data\":{\"hitchStartDate\":\"\(newSchedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"scheduleId\":\"\(newSchedule.id.uuidString)\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n"
+            if let data = logAfterSet.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
+            
+            self.schedule = newSchedule
+            
             // Apply holiday pay rules
             scheduleEngine.handleHolidayPayRules(&schedule)
+            
+            // #region agent log
+            let logBeforeSave = "{\"location\":\"WorkScheduleViewModel.swift:446\",\"message\":\"About to save schedule after setHitchStartDate\",\"data\":{\"hitchStartDate\":\"\(self.schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"scheduleId\":\"\(self.schedule.id.uuidString)\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"E\"}\n"
+            if let data = logBeforeSave.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
             
             saveDebounced()
             

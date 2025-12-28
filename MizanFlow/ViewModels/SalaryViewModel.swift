@@ -27,6 +27,21 @@ class SalaryViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
+        // #region agent log
+        let logEntry = "{\"location\":\"SalaryViewModel.swift:26\",\"message\":\"loadScheduleAndRecalculate ENTRY\",\"data\":{\"month\":\"\(month.formatted(date: .abbreviated, time: .omitted))\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,D,E\"}\n"
+        if let data = logEntry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
+        
         PerformanceMonitor.shared.measure("load_schedule_recalculate") {
             // Try to load all schedules and find the one that contains this month
             let calendar = Calendar.current
@@ -41,9 +56,41 @@ class SalaryViewModel: ObservableObject {
             
             // Load or generate schedule
             var schedule: WorkSchedule
-            if let existingSchedule = dataService.loadLatestSchedule(),
+            let existingSchedule = dataService.loadLatestSchedule()
+            
+            // #region agent log
+            let logLoad = "{\"location\":\"SalaryViewModel.swift:44\",\"message\":\"loadLatestSchedule result\",\"data\":{\"scheduleExists\":\(existingSchedule != nil),\"hitchStartDate\":\"\(existingSchedule?.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"scheduleId\":\"\(existingSchedule?.id.uuidString ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,C,E\"}\n"
+            if let data = logLoad.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                }
+            }
+            // #endregion
+            
+            if let existingSchedule = existingSchedule,
                existingSchedule.hitchStartDate != nil {
                 schedule = existingSchedule
+                
+                // #region agent log
+                let logExisting = "{\"location\":\"SalaryViewModel.swift:46\",\"message\":\"Using existing schedule\",\"data\":{\"hitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"scheduleId\":\"\(schedule.id.uuidString)\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}\n"
+                if let data = logExisting.data(using: .utf8) {
+                    if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                            fileHandle.seekToEndOfFile()
+                            fileHandle.write(data)
+                            fileHandle.closeFile()
+                        }
+                    } else {
+                        FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                    }
+                }
+                // #endregion
                 
                 // Recalculate overtime hours for existing schedule to fix any incorrect values
                 scheduleEngine.recalculateOvertimeHours(&schedule)
@@ -76,13 +123,27 @@ class SalaryViewModel: ObservableObject {
                     dataService.saveSchedule(schedule)
                 }
             } else {
-                // If no valid schedule found or no hitch start date, generate a new one
-                var newSchedule = scheduleEngine.generateSchedule(from: monthStart)
-                // Set March 3rd as the hitch start date
-                let hitchStartComponents = DateComponents(year: 2025, month: 3, day: 3)
-                newSchedule.hitchStartDate = calendar.date(from: hitchStartComponents)
-                dataService.saveSchedule(newSchedule)
-                schedule = newSchedule
+                // #region agent log
+                let logNew = "{\"location\":\"SalaryViewModel.swift:78\",\"message\":\"FALLING INTO ELSE - no schedule or no hitchStartDate\",\"data\":{\"existingSchedule\":\(existingSchedule != nil),\"hitchStartDateIsNil\":\(existingSchedule?.hitchStartDate == nil)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,E\"}\n"
+                if let data = logNew.data(using: .utf8) {
+                    if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                        if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                            fileHandle.seekToEndOfFile()
+                            fileHandle.write(data)
+                            fileHandle.closeFile()
+                        }
+                    } else {
+                        FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+                    }
+                }
+                // #endregion
+                
+                // If no valid schedule found or no hitch start date, we cannot generate a schedule
+                // The user must set the hitch start date first in the Schedule view
+                errorMessage = "Please set the Hitch Start Date in the Schedule view first"
+                isLoading = false
+                AppLogger.viewModel.warning("Cannot generate schedule: no hitch start date set")
+                return
             }
             
             self.currentSchedule = schedule
