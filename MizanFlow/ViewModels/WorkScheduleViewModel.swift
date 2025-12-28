@@ -523,6 +523,37 @@ class WorkScheduleViewModel: ObservableObject {
         saveSchedule()
     }
     
+    // MARK: - Binding Alternative Application
+    
+    /// Applies an interruption with a binding executable alternative block
+    /// This method ensures the selected alternative is applied as a concrete schedule block,
+    /// not just advisory metadata. The alternative becomes part of the actual schedule.
+    func applyInterruptWithExecutableAlternative(
+        interruptionType: WorkSchedule.InterruptionType,
+        interruptionStart: Date,
+        interruptionEnd: Date,
+        preferredReturnDay: WorkSchedule.Weekday?,
+        selectedAlternative: SuggestModeSuggestion
+    ) {
+        logger.debug("""
+        🔒 Applying Binding Alternative:
+           Pattern: \(selectedAlternative.workDays)W/\(selectedAlternative.offDays)O
+           Interruption: \(interruptionStart, privacy: .public) to \(interruptionEnd, privacy: .public)
+           Type: \(interruptionType.rawValue, privacy: .public)
+        """)
+        
+        scheduleEngine.applyInterruptionThenAlternativeBlock(
+            &schedule,
+            interruptionType: interruptionType,
+            interruptionStart: interruptionStart,
+            interruptionEnd: interruptionEnd,
+            alternativeWorkDays: selectedAlternative.workDays,
+            alternativeOffDays: selectedAlternative.offDays
+        )
+        
+        saveSchedule()
+    }
+    
     // Legacy method kept for backward compatibility (but should not be used in Suggest Mode)
     func applySuggestModeSuggestion(_ suggestion: SuggestModeSuggestion, to schedule: inout WorkSchedule) {
         // This is a stub - the real implementation is in the new method above

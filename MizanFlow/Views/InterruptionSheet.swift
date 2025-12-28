@@ -13,6 +13,8 @@ struct InterruptionSheet: View {
     @State private var suggestModeResult: SuggestModeResult?
     @State private var suggestionAlertMessage = ""
     @State private var pendingSuggestion: SuggestModeSuggestion?
+    @State private var selectedAlternative: SuggestModeSuggestion? // Track user's selected alternative
+    @State private var dialogSuggestion: SuggestModeSuggestion? // PART A: Freeze the selected suggestion that the dialog will apply
     
     // NEW: State variables for loop prevention and better alternative handling
     @State private var shownSuggestionIds: Set<String> = []
@@ -74,13 +76,18 @@ struct InterruptionSheet: View {
             }
             .confirmationDialog("Operational Constraints", isPresented: $showingOperationalConstraintsDialog, titleVisibility: .visible) {
                 Button("Accept Exception") {
-                    guard let suggestion = pendingSuggestion else {
-                        print("⚠️ No pending suggestion when Accept Exception clicked")
+                    // PART A: Use dialogSuggestion (not pendingSuggestion) as the authoritative source
+                    guard let suggestion = dialogSuggestion else {
+                        print("⚠️ No dialogSuggestion when Accept Exception clicked")
                         showingOperationalConstraintsDialog = false
                         return
                     }
-                    print("✅ Accept Exception - Applying suggestion: \(suggestion.workDays)W/\(suggestion.offDays)O, Score: \(Int(suggestion.score))")
+                    print("✅ Accept Exception - Applying binding alternative: \(suggestion.workDays)W/\(suggestion.offDays)O, Score: \(Int(suggestion.score))")
                     showingOperationalConstraintsDialog = false
+                    // Clear both states
+                    dialogSuggestion = nil
+                    pendingSuggestion = nil
+                    // Apply the suggestion
                     applySuggestion(suggestion)
                 }
                 Button("Suggest Alternative") {
@@ -88,15 +95,20 @@ struct InterruptionSheet: View {
                     handleSuggestAlternative()
                 }
                 Button("Cancel", role: .cancel) {
-                    exitSuggestionFlow(message: "Suggestion cancelled. You can continue editing.")
+                    // PART A: Clear dialogSuggestion and pendingSuggestion, keep user on sheet
+                    dialogSuggestion = nil
+                    pendingSuggestion = nil
                     showingOperationalConstraintsDialog = false
+                    exitSuggestionFlow(message: "Suggestion cancelled. You can continue editing.")
                 }
             } message: {
                 Text(suggestionAlertMessage)
             }
             .alert("Better Alternative Found", isPresented: $showingBetterAlternativeAlert) {
                 Button("Use This Alternative") {
+                    // PART A: Set BOTH dialogSuggestion and pendingSuggestion when user chooses
                     if let better = betterAlternative {
+                        dialogSuggestion = better
                         pendingSuggestion = better
                         showingBetterAlternativeAlert = false
                         showOperationalAlerts(for: better)
@@ -442,10 +454,14 @@ struct InterruptionSheet: View {
             }
             
             Button(action: {
+                // Track the selected alternative
+                selectedAlternative = alt
                 if alt.isRecommended {
                     print("✅ Direct apply (recommended): \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score))")
                     applySuggestion(alt)
                 } else {
+                    // PART A: Set BOTH dialogSuggestion and pendingSuggestion when user chooses alternative requiring approval
+                    dialogSuggestion = alt
                     pendingSuggestion = alt
                     print("🎯 Selected Alternative: \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score)), Warnings: \(alt.validationWarnings.count + alt.futureSimulationWarnings.count)")
                     showOperationalAlerts(for: alt)
@@ -489,6 +505,8 @@ struct InterruptionSheet: View {
     private func suggestionActionButtons(suggestion: SuggestModeSuggestion, result: SuggestModeResult) -> some View {
         if result.requiresUserApproval || !suggestion.validationWarnings.isEmpty || !suggestion.futureSimulationWarnings.isEmpty {
             Button(action: {
+                // PART A: Set BOTH dialogSuggestion and pendingSuggestion when user chooses primary suggestion
+                dialogSuggestion = suggestion
                 pendingSuggestion = suggestion
                 showOperationalAlerts(for: suggestion)
             }) {
@@ -500,6 +518,8 @@ struct InterruptionSheet: View {
             }
         } else {
             Button(action: {
+                // Track the selected suggestion
+                selectedAlternative = suggestion
                 applySuggestion(suggestion)
             }) {
                 Text("Apply Suggestion")
@@ -576,41 +596,44 @@ struct InterruptionSheet: View {
     }
     
     private func handleInterruptionWithSuggestMode() {
-        // CRITICAL: Prevent dismissal if ANY alert is showing
+        // PART B: Prevent dismissal if ANY alert is showing
         // Alerts must only dismiss via explicit user action
         if showingOperationalConstraintsDialog || showingBetterAlternativeAlert {
             return
         }
         
-        // If there's a pending suggestion that requires approval, show alert
+        // PART B: PRIORITY 1: If user has selected an alternative, use it
+        if let selected = selectedAlternative {
+            print("✅ Using user-selected alternative: \(selected.workDays)W/\(selected.offDays)O")
+            applySuggestion(selected)
+            return
+        }
+        
+        // PART B: PRIORITY 2: If user is reviewing an option (dialogSuggestion != nil), show approval dialog
+        // DO NOT infer cancellation from pendingSuggestion - it's only for loop prevention
+        if let dialog = dialogSuggestion {
+            // User has selected something but hasn't approved yet - show dialog
+            showOperationalAlerts(for: dialog)
+            return
+        }
+        
+        // PART B: PRIORITY 3: If suggestModeResult exists and requires approval, show alert for primary suggestion
+        // ONLY if user hasn't selected something yet
         if let result = suggestModeResult,
            let suggestion = result.suggestion,
-           pendingSuggestion == nil {
+           dialogSuggestion == nil {
             // Check if this suggestion needs approval
             if result.requiresUserApproval ||
                !suggestion.validationWarnings.isEmpty ||
                !suggestion.futureSimulationWarnings.isEmpty {
+                dialogSuggestion = suggestion
                 pendingSuggestion = suggestion
                 showOperationalAlerts(result.alerts)
                 return
             }
         }
         
-        // If pending suggestion exists but no alert showing, user must have cancelled
-        // Fall through to standard handling
-        if pendingSuggestion != nil {
-            // User cancelled suggestion flow, use standard interruption
-            viewModel.handleInterruptionWithEnhancedLogic(
-                startDate: startDate,
-                endDate: endDate,
-                type: selectedType,
-                preferredReturnDay: preferredReturnDay
-            )
-            presentationMode.wrappedValue.dismiss()
-            return
-        }
-        
-        // Auto-apply only if no warnings and no approval needed
+        // PART B: PRIORITY 4: Auto-apply only if no warnings and no approval needed
         if let result = suggestModeResult,
            let suggestion = result.suggestion,
            !result.requiresUserApproval,
@@ -618,7 +641,7 @@ struct InterruptionSheet: View {
            suggestion.futureSimulationWarnings.isEmpty {
             applySuggestion(suggestion)
         } else {
-            // Fallback to standard interruption handling
+            // PART B: Fallback to standard interruption handling only if no suggestion selected
             viewModel.handleInterruptionWithEnhancedLogic(
                 startDate: startDate,
                 endDate: endDate,
@@ -630,26 +653,35 @@ struct InterruptionSheet: View {
     }
     
     private func applySuggestion(_ suggestion: SuggestModeSuggestion) {
-        // FIXED: Add logging to verify correct suggestion is being applied
+        // PART E: Add definitive debug log to prove binding works
+        let source = (dialogSuggestion?.workDays == suggestion.workDays && dialogSuggestion?.offDays == suggestion.offDays) ? "Dialog" : 
+                     (selectedAlternative?.workDays == suggestion.workDays && selectedAlternative?.offDays == suggestion.offDays) ? "Alternative" : "Primary"
         print("""
         🎯 InterruptionSheet.applySuggestion called:
+           Source: \(source)
            Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
            Score: \(Int(suggestion.score))
            Is Recommended: \(suggestion.isRecommended)
            Validation Warnings: \(suggestion.validationWarnings.count)
            Future Warnings: \(suggestion.futureSimulationWarnings.count)
            Interruption: \(startDate) to \(endDate)
+           Preferred Return Day: \(preferredReturnDay?.description ?? "None")
+           Target Return Day: \(suggestion.targetReturnDay.description)
         """)
         
-        // Apply suggestion with interruption dates - this handles:
-        // 1. Earned off consumption inside interruption
-        // 2. Chosen suggestion cycle immediately after interruption
-        // 3. Resume standard 14W/7O after suggestion segment
-        viewModel.applySuggestModeSuggestion(
-            suggestion,
+        // PART C: Clear all state - applySuggestion is authoritative, nothing should override it
+        pendingSuggestion = nil
+        dialogSuggestion = nil
+        selectedAlternative = nil
+        
+        // PART C: Use binding method to ensure the alternative is actually applied as a concrete schedule block
+        // This is the ONLY place that applies suggestions - no other handlers should be called after this
+        viewModel.applyInterruptWithExecutableAlternative(
+            interruptionType: selectedType,
             interruptionStart: startDate,
             interruptionEnd: endDate,
-            type: selectedType
+            preferredReturnDay: preferredReturnDay,
+            selectedAlternative: suggestion
         )
         
         presentationMode.wrappedValue.dismiss()
@@ -771,7 +803,8 @@ struct InterruptionSheet: View {
     // MARK: - Exit Flow Function
     
     private func exitSuggestionFlow(message: String? = nil) {
-        // Clear pending suggestion
+        // PART A: Clear both dialogSuggestion and pendingSuggestion
+        dialogSuggestion = nil
         pendingSuggestion = nil
         
         // Dismiss all alerts

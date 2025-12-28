@@ -462,18 +462,33 @@ class ScheduleEngine {
             return true
         }
         
-        // ENHANCED: Sort by score (highest first), prioritizing alignment with target return day
-        let sorted = alternatives.sorted { first, second in
-            // First priority: alignment with target return day
-            let firstAligns = first.score > 90 && first.futureSimulationWarnings.isEmpty
-            let secondAligns = second.score > 90 && second.futureSimulationWarnings.isEmpty
-            if firstAligns != secondAligns {
-                return firstAligns
-            }
-            // Second priority: score
-            return first.score > second.score
+        // ENHANCED: Sort by alignment with target return day first, then by score
+        // Calculate alignment for each alternative explicitly
+        let alternativesWithAlignment = alternatives.map { alt -> (alt: SuggestModeSuggestion, aligns: Bool) in
+            let totalDays = alt.workDays + alt.offDays
+            let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
+            let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
+            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+            let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
+            let aligns = (nextCycleStartDay == targetReturnDay)
+            return (alt, aligns)
         }
-        return Array(sorted.prefix(4))
+        
+        let sorted = alternativesWithAlignment.sorted { first, second in
+            // First priority: alignment with target return day
+            if first.aligns != second.aligns {
+                return first.aligns // Prefer aligned alternatives
+            }
+            // Second priority: fewer warnings
+            let firstWarnings = first.alt.validationWarnings.count + first.alt.futureSimulationWarnings.count
+            let secondWarnings = second.alt.validationWarnings.count + second.alt.futureSimulationWarnings.count
+            if firstWarnings != secondWarnings {
+                return firstWarnings < secondWarnings
+            }
+            // Third priority: score
+            return first.alt.score > second.alt.score
+        }
+        return Array(sorted.map { $0.alt }.prefix(4))
     }
     
     // MARK: - Suggest Mode with Operational Constraints
@@ -686,15 +701,24 @@ class ScheduleEngine {
                     targetReturnDay: targetReturnDay
                 )
                 
+                // Check if this suggestion aligns with target return day
+                let totalDays = workDays + offDays
+                let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
+                let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
+                let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+                let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
+                let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
+                
                 let score = calculateSuggestionScore(
                     workDays: workDays,
                     offDays: offDays,
                     validationWarnings: validationWarnings,
                     futureSimulationWarnings: futureWarnings,
-                    adjustmentType: .minorAdjustment
+                    adjustmentType: .minorAdjustment,
+                    alignsWithTargetReturnDay: alignsWithTarget
                 )
                 
-                let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty
+                let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty && alignsWithTarget
                 
                 return SuggestModeSuggestion(
                     adjustmentType: .minorAdjustment,
@@ -778,15 +802,24 @@ class ScheduleEngine {
                     targetReturnDay: targetReturnDay
                 )
                 
+                // Check if this suggestion aligns with target return day
+                let totalDays = cycle.workDays + cycle.offDays
+                let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
+                let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
+                let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+                let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
+                let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
+                
                 let score = calculateSuggestionScore(
                     workDays: cycle.workDays,
                     offDays: cycle.offDays,
                     validationWarnings: validationWarnings,
                     futureSimulationWarnings: futureWarnings,
-                    adjustmentType: .moderateAdjustment
+                    adjustmentType: .moderateAdjustment,
+                    alignsWithTargetReturnDay: alignsWithTarget
                 )
                 
-                let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty
+                let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty && alignsWithTarget
                 
                 return SuggestModeSuggestion(
                     adjustmentType: .moderateAdjustment,
@@ -842,15 +875,24 @@ class ScheduleEngine {
             targetReturnDay: targetReturnDay
         )
         
+        // Check if this suggestion aligns with target return day
+        let totalDays = newWorkDays + newOffDays
+        let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
+        let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
+        let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+        let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
+        let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
+        
         let score = calculateSuggestionScore(
             workDays: newWorkDays,
             offDays: newOffDays,
             validationWarnings: validationWarnings,
             futureSimulationWarnings: futureWarnings,
-            adjustmentType: .cycleReconstruction
+            adjustmentType: .cycleReconstruction,
+            alignsWithTargetReturnDay: alignsWithTarget
         )
         
-        let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty
+        let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty && alignsWithTarget
         
         return SuggestModeSuggestion(
             adjustmentType: .cycleReconstruction,
@@ -1088,9 +1130,31 @@ class ScheduleEngine {
         let hitchStartDate = schedule.hitchStartDate ?? schedule.startDate
         let normalizedHitchStart = normalizeToStartOfDay(hitchStartDate)
         
+        // PART D: Remove force unwrap crash risk - use safe guard instead
+        guard let interruptionTypeRaw = schedule.interruptionType else {
+            print("⚠️ interruptionType nil in applyEarnedOffDaysToInterruption; defaulting to vacation")
+            let interruptionType = convertInterruptionTypeToDayType(.vacation)
+            // Continue with default type - mark all days in interruption period
+            for i in 0..<schedule.days.count {
+                let day = schedule.days[i]
+                let normalizedDayDate = normalizeToStartOfDay(day.date)
+                
+                if normalizedDayDate >= normalizedStart && normalizedDayDate <= normalizedEnd {
+                    schedule.days[i].type = interruptionType
+                    schedule.days[i].notes = "Interruption day"
+                    schedule.days[i].isOverride = false
+                }
+                
+                if normalizedDayDate > normalizedEnd {
+                    break
+                }
+            }
+            return
+        }
+        
         // Step 1: Mark ALL days in interruption period as interruption type first
         // This ensures the first day (e.g., Dec 1) is always marked
-        let interruptionType = convertInterruptionTypeToDayType(schedule.interruptionType!)
+        let interruptionType = convertInterruptionTypeToDayType(interruptionTypeRaw)
         
         for i in 0..<schedule.days.count {
             let day = schedule.days[i]
@@ -1177,6 +1241,146 @@ class ScheduleEngine {
                 break
             }
         }
+    }
+    
+    // MARK: - Binding Alternative Application
+    
+    /// Applies interruption with a binding executable alternative block
+    /// This is the dedicated method for applying alternatives selected via "Accept Exception"
+    /// The alternative becomes a concrete, binding part of the schedule.
+    /// 
+    /// Steps:
+    /// 1. Apply interruption days correctly (earned off first, then vacation)
+    /// 2. Apply the chosen alternative as a real post-interruption block
+    ///    - Starting the day after interruption ends
+    ///    - Mark workDays consecutive .work
+    ///    - Mark offDays consecutive .off
+    /// 3. After that block ends, resume the standard 14W / 7O baseline forward
+    func applyInterruptionThenAlternativeBlock(
+        _ schedule: inout WorkSchedule,
+        interruptionType: WorkSchedule.InterruptionType,
+        interruptionStart: Date,
+        interruptionEnd: Date,
+        alternativeWorkDays: Int,
+        alternativeOffDays: Int
+    ) {
+        let calendar = Calendar.current
+        let normalizedStart = normalizeToStartOfDay(interruptionStart)
+        let normalizedEnd = normalizeToStartOfDay(interruptionEnd)
+        
+        // Set interruption metadata
+        schedule.isInterrupted = true
+        schedule.interruptionStart = interruptionStart
+        schedule.interruptionEnd = interruptionEnd
+        schedule.interruptionType = interruptionType
+        
+        // PART 1: Apply interruption days correctly (Earned Off first, then Vacation)
+        let (workedDays, earnedDays) = calculateWorkedAndEarnedDaysBeforeInterruption(schedule, interruptionStart: interruptionStart)
+        schedule.workedDaysBeforeInterruption = workedDays
+        schedule.earnedOffDaysBeforeInterruption = earnedDays
+        
+        // Calculate total interruption days
+        let totalInterruptionDays = (calendar.dateComponents([.day], from: interruptionStart, to: interruptionEnd).day ?? 0) + 1
+        let earnedUsed = min(earnedDays, totalInterruptionDays)
+        
+        // Get hitch start to determine original day types
+        let hitchStartDate = schedule.hitchStartDate ?? schedule.startDate
+        let normalizedHitchStart = normalizeToStartOfDay(hitchStartDate)
+        let interruptionDayType = convertInterruptionTypeToDayType(interruptionType)
+        
+        // Step 1: Mark all interruption days as interruption type first
+        for i in 0..<schedule.days.count {
+            let day = schedule.days[i]
+            let normalizedDayDate = normalizeToStartOfDay(day.date)
+            
+            if normalizedDayDate >= normalizedStart && normalizedDayDate <= normalizedEnd {
+                schedule.days[i].type = interruptionDayType
+                schedule.days[i].notes = "Interruption day"
+                schedule.days[i].isOverride = false
+            }
+            
+            if normalizedDayDate > normalizedEnd {
+                break
+            }
+        }
+        
+        // Step 2: Apply earned off days first (only to originally workdays)
+        var remainingEarnedDays = earnedUsed
+        for i in 0..<schedule.days.count {
+            let day = schedule.days[i]
+            let normalizedDayDate = normalizeToStartOfDay(day.date)
+            
+            if normalizedDayDate >= normalizedStart && normalizedDayDate <= normalizedEnd {
+                // Determine if this day was originally a workday using the hitch pattern
+                let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDayDate).day ?? 0
+                let dayInCycle = (daysSinceHitchStart % 21 + 21) % 21 // Ensure positive
+                
+                // Only apply earned off to originally workdays (days 0-13 in cycle)
+                if dayInCycle < 14 && remainingEarnedDays > 0 {
+                    schedule.days[i].type = .earnedOffDay
+                    schedule.days[i].notes = "Earned off day due to work before interruption"
+                    schedule.days[i].isOverride = false
+                    remainingEarnedDays -= 1
+                }
+                // Days that were originally off days (days 14-20) remain as interruption type
+            }
+            
+            if normalizedDayDate > normalizedEnd {
+                break
+            }
+        }
+        
+        // PART 2: Apply the selected alternative as an executable block
+        // Starting the day after interruption ends
+        let resumeDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
+        guard let resumeIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: resumeDate) }) else {
+            print("⚠️ Could not find resume date in schedule")
+            return
+        }
+        
+        var currentIndex = resumeIndex
+        
+        // Mark alternativeWorkDays consecutive days as .work
+        for _ in 0..<alternativeWorkDays {
+            if currentIndex < schedule.days.count {
+                schedule.days[currentIndex].type = .workday
+                schedule.days[currentIndex].notes = "Binding Alternative: \(alternativeWorkDays)W/\(alternativeOffDays)O cycle"
+                schedule.days[currentIndex].isOverride = false
+                schedule.days[currentIndex].isInHitch = true
+                currentIndex += 1
+            }
+        }
+        
+        // Mark alternativeOffDays consecutive days as .off
+        for _ in 0..<alternativeOffDays {
+            if currentIndex < schedule.days.count {
+                schedule.days[currentIndex].type = .earnedOffDay
+                schedule.days[currentIndex].notes = "Binding Alternative: \(alternativeWorkDays)W/\(alternativeOffDays)O cycle"
+                schedule.days[currentIndex].isOverride = false
+                schedule.days[currentIndex].isInHitch = false
+                currentIndex += 1
+            }
+        }
+        
+        // PART 3: Resume baseline 14W / 7O from the end of the alternative block
+        let baselineAnchor = currentIndex
+        if baselineAnchor < schedule.days.count {
+            applyStandard14_7Pattern(&schedule, startingFrom: baselineAnchor)
+        }
+        
+        // Log instrumentation for verification
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .none
+        
+        print("""
+        ✅ Binding Alternative Applied:
+           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
+           Earned Off Used: \(earnedUsed) of \(earnedDays) available
+           Vacation Used: \(max(0, totalInterruptionDays - earnedUsed))
+           Alternative Block: \(alternativeWorkDays)W/\(alternativeOffDays)O starting \(dateFormatter.string(from: resumeDate))
+           Baseline 14W/7O resumes from index \(baselineAnchor)
+        """)
     }
     
     // MARK: - Suggest Mode Application
@@ -1291,7 +1495,7 @@ class ScheduleEngine {
             applyStandard14_7Pattern(&schedule, startingFrom: currentIndex)
         }
         
-        // ENHANCED: Log instrumentation for verification
+        // PART E: Add definitive debug log to prove binding works
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .short
         dateFormatter.timeStyle = .none
@@ -1299,6 +1503,17 @@ class ScheduleEngine {
         let totalInterruptionDays = (calendar.dateComponents([.day], from: interruptionStart, to: interruptionEnd).day ?? 0) + 1
         let earnedOffUsed = earnedDays - remainingEarnedDays
         let vacationUsed = max(0, totalInterruptionDays - earnedOffUsed)
+        
+        print("""
+        ✅ ScheduleEngine.applySuggestModeSuggestion VERIFIED:
+           Selected Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
+           Applied Work Days: \(suggestion.workDays) (starting index \(resumeIndex))
+           Applied Off Days: \(suggestion.offDays)
+           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
+           Earned Off Used: \(earnedOffUsed) of \(earnedDays) available
+           Vacation Used: \(vacationUsed)
+           Baseline 14W/7O resumes from index \(currentIndex)
+        """)
         
         // Verify the applied segment matches the suggestion
         var appliedWorkDays = 0
