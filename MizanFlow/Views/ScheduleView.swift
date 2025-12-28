@@ -16,28 +16,37 @@ struct ScheduleView: View {
         NavigationView {
             VStack(spacing: 0) {
                 // Top bar with Hitch Start Date button
-                HStack {
+                HStack(spacing: 12) {
                     Button(action: {
                         HapticFeedback.buttonTap()
                         showingHitchStartPicker = true
                     }) {
                         Label(NSLocalizedString("Set Hitch Start Date", comment: "Set hitch start date button"), systemImage: "calendar.badge.plus")
                             .font(.subheadline)
-                            .padding(8)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
+                            .frame(minHeight: 44)
+                            .padding(.horizontal, 12)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                     .accessibilityLabel(NSLocalizedString("Set Hitch Start Date", comment: "Set hitch start date accessibility"))
+                    .accessibilityHint(NSLocalizedString("Tap to set the start date for your work schedule", comment: ""))
                     
                     Spacer()
                     
                     // Show current hitch pattern
                     if viewModel.hitchStartDate != nil {
-                        Text("14/7 Hitch")
-                            .font(.caption)
-                            .padding(6)
-                            .background(Color.green.opacity(0.2))
-                            .cornerRadius(4)
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                            Text("14/7 Hitch")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.green.opacity(0.15))
+                        .cornerRadius(8)
                     }
                 }
                 .padding([.top, .horizontal])
@@ -50,26 +59,38 @@ struct ScheduleView: View {
                     }) {
                         Image(systemName: "chevron.left")
                             .foregroundColor(.primary)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(NSLocalizedString("Previous month", comment: "Previous month button"))
+                    .accessibilityHint(NSLocalizedString("Tap to view the previous month", comment: ""))
+                    
                     Spacer()
+                    
                     Text(viewModel.getMonthString(viewModel.selectedDate))
                         .font(.title2)
                         .bold()
                         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .accessibilityAddTraits(.isHeader)
+                    
                     Spacer()
+                    
                     Button(action: {
                         HapticFeedback.calendarNavigation()
                         nextMonth()
                     }) {
                         Image(systemName: "chevron.right")
                             .foregroundColor(.primary)
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(NSLocalizedString("Next month", comment: "Next month button"))
+                    .accessibilityHint(NSLocalizedString("Tap to view the next month", comment: ""))
                 }
                 .padding(.horizontal)
-                .padding(.top, 4)
+                .padding(.top, 8)
                 
                 // Weekday headers
                 HStack {
@@ -99,6 +120,8 @@ struct ScheduleView: View {
                                         type: day.type.description,
                                         isSelected: Calendar.current.isDate(day.date, inSameDayAs: viewModel.selectedDate)
                                     )
+                                    .accessibilityLabel("\(day.type.description), \(Calendar.current.component(.day, from: day.date))")
+                                    .accessibilityHint("Tap to view details for this day")
                             } else {
                                 Color.clear
                                     .aspectRatio(1, contentMode: .fit)
@@ -506,8 +529,9 @@ struct DayCell: View {
             }
             .padding(.vertical, 2)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .aspectRatio(1, contentMode: .fit)
+        .contentShape(Rectangle()) // Make entire cell tappable
     }
     
     private var shouldShowDayLabel: Bool {

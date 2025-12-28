@@ -16,8 +16,14 @@ struct BudgetView: View {
         NavigationView {
             List {
                 // Month Selector
-                Section {
+                Section(header: HStack {
+                    Image(systemName: "calendar")
+                    Text("Month")
+                }) {
                     Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
                         tempMonth = viewModel.selectedMonth
                         showingMonthPicker = true
                     }) {
@@ -26,49 +32,70 @@ struct BudgetView: View {
                             Spacer()
                             Text(viewModel.formatMonth(viewModel.selectedMonth))
                                 .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
+                        .frame(minHeight: 44)
                     }
-                } header: {
-                    Text("Month")
+                    .accessibilityLabel("Select Month")
+                    .accessibilityHint("Tap to choose a different month")
                 }
                 
                 // Income Section
-                Section {
+                Section(header: HStack {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Income")
+                }) {
                     ForEach(viewModel.entriesForMonth.filter { $0.isIncome }) { entry in
                         BudgetEntryRow(entry: entry, viewModel: viewModel)
                     }
                     
                     HStack {
+                        Image(systemName: "sum")
+                            .foregroundColor(.green)
                         Text("Total Income")
                             .bold()
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.totalIncome))
                             .bold()
+                            .foregroundColor(.green)
                     }
-                } header: {
-                    Text("Income")
+                    .frame(minHeight: 44)
                 }
                 
                 // Expenses Section
-                Section {
+                Section(header: HStack {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundColor(.red)
+                    Text("Expenses")
+                }) {
                     ForEach(viewModel.entriesForMonth.filter { !$0.isIncome }) { entry in
                         BudgetEntryRow(entry: entry, viewModel: viewModel)
                     }
                     
                     HStack {
+                        Image(systemName: "sum")
+                            .foregroundColor(.red)
                         Text("Total Expenses")
                             .bold()
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.totalExpenses))
                             .bold()
+                            .foregroundColor(.red)
                     }
-                } header: {
-                    Text("Expenses")
+                    .frame(minHeight: 44)
                 }
                 
                 // Summary Section
-                Section {
+                Section(header: HStack {
+                    Image(systemName: "chart.bar.fill")
+                    Text("Summary")
+                }) {
                     HStack {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .foregroundColor(viewModel.netBalance >= 0 ? .green : .red)
                         Text("Net Balance")
                             .font(.headline)
                         Spacer()
@@ -76,8 +103,11 @@ struct BudgetView: View {
                             .font(.headline)
                             .foregroundColor(viewModel.netBalance >= 0 ? .green : .red)
                     }
+                    .frame(minHeight: 44)
                     
                     HStack {
+                        Image(systemName: "percent")
+                            .foregroundColor(viewModel.savingsRate >= 0 ? .green : .red)
                         Text("Savings Rate")
                             .font(.headline)
                         Spacer()
@@ -85,8 +115,7 @@ struct BudgetView: View {
                             .font(.headline)
                             .foregroundColor(viewModel.savingsRate >= 0 ? .green : .red)
                     }
-                } header: {
-                    Text("Summary")
+                    .frame(minHeight: 44)
                 }
                 
                 // Category Breakdown
@@ -106,6 +135,7 @@ struct BudgetView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Budget")
             .toolbar {
                 ToolbarItem(placement: .keyboard) {
@@ -115,9 +145,17 @@ struct BudgetView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { viewModel.showingAddEntrySheet = true }) {
-                        Image(systemName: "plus.circle")
+                    Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        viewModel.showingAddEntrySheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
                     }
+                    .accessibilityLabel("Add Budget Entry")
+                    .accessibilityHint("Tap to add a new income or expense entry")
                 }
             }
             .sheet(isPresented: $showingMonthPicker) {
@@ -146,26 +184,40 @@ struct BudgetEntryRow: View {
     @State private var showingEditSheet = false
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text(entry.entryDescription)
-                    .font(.headline)
-                if let notes = entry.notes {
-                    Text(notes)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Spacer()
-            
-            Text(viewModel.formatCurrency(entry.amount))
-                .foregroundColor(entry.isIncome ? .green : .red)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button(action: {
+            // Add haptic feedback
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
             showingEditSheet = true
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: entry.isIncome ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                    .foregroundColor(entry.isIncome ? .green : .red)
+                    .font(.title3)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.entryDescription)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    if let notes = entry.notes {
+                        Text(notes)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Text(viewModel.formatCurrency(entry.amount))
+                    .foregroundColor(entry.isIncome ? .green : .red)
+                    .font(.headline)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(entry.entryDescription), \(viewModel.formatCurrency(entry.amount))")
+        .accessibilityHint("Tap to edit this budget entry")
         .sheet(isPresented: $showingEditSheet) {
             EditBudgetEntrySheet(entry: entry, viewModel: viewModel)
         }

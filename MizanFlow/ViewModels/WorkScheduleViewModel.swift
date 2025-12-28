@@ -203,9 +203,14 @@ class WorkScheduleViewModel: ObservableObject {
             return []
         }
 
+        // Normalize dates to start of day for accurate comparison
+        let normalizedMonthStart = calendar.startOfDay(for: monthStart)
+        let normalizedMonthEnd = calendar.startOfDay(for: monthEnd)
+
         // Filter days for the selected month
         let daysInMonth = schedule.days.filter { day in
-            day.date >= monthStart && day.date <= monthEnd
+            let normalizedDayDate = calendar.startOfDay(for: day.date)
+            return normalizedDayDate >= normalizedMonthStart && normalizedDayDate <= normalizedMonthEnd
         }
 
         // If no days exist for this month, generate enough months to cover the selected date
@@ -218,8 +223,9 @@ class WorkScheduleViewModel: ObservableObject {
             // Generate schedule in background for better performance
             Task { @MainActor in
                 let scheduleEngine = self.scheduleEngine
+                let hitchStart = self.hitchStartDate
                 self.schedule = await Task.detached(priority: .userInitiated) {
-                    scheduleEngine.generateSchedule(from: startDateToUse, for: monthsToGenerate)
+                    scheduleEngine.generateSchedule(from: startDateToUse, for: monthsToGenerate, hitchStartDate: hitchStart)
                 }.value
                 saveSchedule()
             }
@@ -431,7 +437,7 @@ class WorkScheduleViewModel: ObservableObject {
             // Create a new schedule from this hitch start date
             let scheduleEngine = self.scheduleEngine
             self.schedule = await Task.detached(priority: .userInitiated) {
-                scheduleEngine.generateSchedule(from: date)
+                scheduleEngine.generateSchedule(from: date, hitchStartDate: date)
             }.value
             
             // Apply holiday pay rules
@@ -504,6 +510,11 @@ class WorkScheduleViewModel: ObservableObject {
         interruptionEnd: Date,
         type: WorkSchedule.InterruptionType
     ) {
+        // #region agent log
+        if let logData = try? JSONSerialization.data(withJSONObject: ["location":"WorkScheduleViewModel.swift:501","message":"applySuggestModeSuggestion ENTRY","data":["suggestionWorkDays":suggestion.workDays,"suggestionOffDays":suggestion.offDays,"suggestionScore":suggestion.score],"timestamp":Int(Date().timeIntervalSince1970*1000),"sessionId":"debug-session","runId":"run1","hypothesisId":"H3"]), let logString = String(data: logData, encoding: .utf8) {
+            try? (logString + "\n").write(toFile: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", atomically: true, encoding: .utf8)
+        }
+        // #endregion
         // Log selected suggestion for verification
         logger.debug("""
         🎯 Applying Suggest Mode Suggestion:
@@ -512,6 +523,21 @@ class WorkScheduleViewModel: ObservableObject {
            Type: \(type.rawValue, privacy: .public)
         """)
         
+        // #region agent log
+        let logEngine = "{\"location\":\"WorkScheduleViewModel.swift:515\",\"message\":\"About to call scheduleEngine.applySuggestModeSuggestion\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H3\"}\n"
+        if let data = logEngine.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        print("🔍 DEBUG: ViewModel calling scheduleEngine with: \(suggestion.workDays)W/\(suggestion.offDays)O")
+        // #endregion
         scheduleEngine.applySuggestModeSuggestion(
             &schedule,
             suggestion: suggestion,

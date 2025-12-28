@@ -16,32 +16,66 @@ struct SettingsView: View {
         NavigationView {
             List {
                 // Language Section
-                Section(header: Text("Language")) {
-                    Button(action: { viewModel.showingLanguageSheet = true }) {
+                Section(header: HStack {
+                    Image(systemName: "globe")
+                    Text("Language")
+                }) {
+                    Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        viewModel.showingLanguageSheet = true
+                    }) {
                         HStack {
                             Text("Language")
                             Spacer()
                             Text(viewModel.getLanguageDisplayName(viewModel.settings.language))
                                 .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
+                        .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Language")
+                    .accessibilityHint("Tap to change the app language")
                 }
                 
                 // Theme Section
-                Section(header: Text("Theme")) {
-                    Button(action: { viewModel.showingThemeSheet = true }) {
+                Section(header: HStack {
+                    Image(systemName: "paintbrush.fill")
+                    Text("Theme")
+                }) {
+                    Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        viewModel.showingThemeSheet = true
+                    }) {
                         HStack {
                             Text("Theme")
                             Spacer()
                             Text(viewModel.getThemeDisplayName(viewModel.settings.theme))
                                 .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
+                        .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Theme")
+                    .accessibilityHint("Tap to change the app theme")
                 }
                 
                 // Notifications Section
-                Section(header: Text("Notifications")) {
+                Section(header: HStack {
+                    Image(systemName: "bell.fill")
+                    Text("Notifications")
+                }) {
                     Toggle("Enable Notifications", isOn: $viewModel.settings.notificationsEnabled)
+                        .frame(minHeight: 44)
+                        .accessibilityLabel("Enable Notifications")
+                        .accessibilityHint("Toggle to enable or disable app notifications")
                     
                     if viewModel.settings.notificationsEnabled {
                         HStack {
@@ -53,54 +87,95 @@ struct SettingsView: View {
                                 .frame(width: 60)
                                 .focused($isThresholdFieldFocused)
                         }
+                        .frame(minHeight: 44)
+                        .accessibilityLabel("Low Off Days Threshold")
+                        .accessibilityHint("Enter the number of off days that triggers a low balance warning")
                     }
                 }
                 
                 // About Section
-                Section(header: Text("About")) {
+                Section(header: HStack {
+                    Image(systemName: "info.circle.fill")
+                    Text("About")
+                }) {
                     HStack {
+                        Image(systemName: "app.badge")
+                            .foregroundColor(.blue)
                         Text("Version")
                         Spacer()
                         Text(viewModel.appVersion)
                             .foregroundColor(.secondary)
                     }
+                    .frame(minHeight: 44)
                     
                     HStack {
+                        Image(systemName: "hammer.fill")
+                            .foregroundColor(.gray)
                         Text("Build")
                         Spacer()
                         Text(viewModel.buildNumber)
                             .foregroundColor(.secondary)
                     }
+                    .frame(minHeight: 44)
                     
                     HStack {
+                        Image(systemName: "c.circle.fill")
+                            .foregroundColor(.gray)
                         Text("Copyright")
                         Spacer()
                         Text("© \(viewModel.copyrightYear) MizanFlow")
                             .foregroundColor(.secondary)
                     }
+                    .frame(minHeight: 44)
                 }
                 
                 // Export Section
-                Section {
+                Section(header: HStack {
+                    Image(systemName: "square.and.arrow.up.fill")
+                    Text("Data Management")
+                }) {
                     Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
                         exportData = viewModel.prepareExportData()
                         showingExportSheet = true
                     }) {
                         HStack {
                             Image(systemName: "square.and.arrow.up")
                             Text("Export Settings")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
+                        .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Export Settings")
+                    .accessibilityHint("Tap to export your app settings and data")
                 }
                 
                 // Testing Section
-                Section(header: Text("Testing")) {
+                Section(header: HStack {
+                    Image(systemName: "testtube.2")
+                    Text("Testing")
+                }) {
                     Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
                         showResetAlert = true
                     }) {
-                        Text("Reset Vacation Balance to 30 Days")
-                            .foregroundColor(.red)
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundColor(.red)
+                            Text("Reset Vacation Balance to 30 Days")
+                                .foregroundColor(.red)
+                        }
+                        .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Reset Vacation Balance to 30 Days")
+                    .accessibilityHint("Tap to reset vacation balance for testing purposes")
                     .alert(isPresented: $showResetAlert) {
                         Alert(
                             title: Text("Reset Vacation Balance"),
@@ -113,17 +188,28 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Data Management Section
-                Section(header: Text("Data Management")) {
+                // Data Management Section - Clear Data
+                Section {
                     Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                        impactFeedback.impactOccurred()
                         viewModel.showingCacheWipeAlert = true
                     }) {
                         HStack {
-                            Image(systemName: "trash")
+                            Image(systemName: "trash.fill")
+                                .foregroundColor(.red)
                             Text("Clear All Data")
                                 .foregroundColor(.red)
+                            Spacer()
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                                .font(.caption)
                         }
+                        .frame(minHeight: 44)
                     }
+                    .accessibilityLabel("Clear All Data")
+                    .accessibilityHint("Warning: This will permanently delete all your data. Tap to confirm.")
                     .alert(isPresented: $viewModel.showingCacheWipeAlert) {
                         Alert(
                             title: Text("Clear All Data"),
@@ -149,6 +235,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Settings")
             .dismissKeyboardOnTap(focusedField: $isThresholdFieldFocused)
             .toolbar {

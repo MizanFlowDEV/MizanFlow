@@ -88,8 +88,13 @@ class SmartAlertService {
             return
         }
         
+        // Normalize dates to start of day for accurate comparison
+        let normalizedToday = calendar.startOfDay(for: today)
+        let normalizedMonthEnd = calendar.startOfDay(for: monthEnd)
+        
         let remainingOffDays = schedule.days.filter { day in
-            day.date >= today && day.date <= monthEnd && day.type == .earnedOffDay
+            let normalizedDayDate = calendar.startOfDay(for: day.date)
+            return normalizedDayDate >= normalizedToday && normalizedDayDate <= normalizedMonthEnd && day.type == .earnedOffDay
         }.count
         
         if remainingOffDays <= threshold {
@@ -129,12 +134,19 @@ class SmartAlertService {
             return
         }
         
+        // Normalize dates to start of day for accurate comparison
+        let calendar = Calendar.current
+        let normalizedMonthStart = calendar.startOfDay(for: monthStart)
+        let normalizedMonthEnd = calendar.startOfDay(for: monthEnd)
+        
         let workDays = schedule.days.filter { day in
-            day.date >= monthStart && day.date <= monthEnd && day.type == .workday
+            let normalizedDayDate = calendar.startOfDay(for: day.date)
+            return normalizedDayDate >= normalizedMonthStart && normalizedDayDate <= normalizedMonthEnd && day.type == .workday
         }.count
         
         let offDays = schedule.days.filter { day in
-            day.date >= monthStart && day.date <= monthEnd && day.type == .earnedOffDay
+            let normalizedDayDate = calendar.startOfDay(for: day.date)
+            return normalizedDayDate >= normalizedMonthStart && normalizedDayDate <= normalizedMonthEnd && day.type == .earnedOffDay
         }.count
         
         var suggestions: [String] = []

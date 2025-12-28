@@ -7,7 +7,8 @@ class SalaryViewModel: ObservableObject {
     @Published var selectedMonth: Date = Date()
     @Published var showingAddIncomeSheet = false
     @Published var showingAddDeductionSheet = false
-    @Published var showingEditPercentagesSheet = false
+    @Published var isLoading = false
+    @Published var errorMessage: String?
     
     private let salaryEngine = SalaryEngine.shared
     private let dataService = DataPersistenceService.shared
@@ -23,20 +24,57 @@ class SalaryViewModel: ObservableObject {
     }
     
     private func loadScheduleAndRecalculate(for month: Date) {
+        isLoading = true
+        errorMessage = nil
+        
         PerformanceMonitor.shared.measure("load_schedule_recalculate") {
             // Try to load all schedules and find the one that contains this month
             let calendar = Calendar.current
             let components = calendar.dateComponents([.year, .month], from: month)
             guard let monthStart = calendar.date(from: components),
-                  let _ = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) else {
+                  let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) else {
+                errorMessage = "Failed to calculate month boundaries"
+                isLoading = false
+                AppLogger.viewModel.error("Failed to calculate month boundaries")
                 return
             }
             
             // Load or generate schedule
-            let schedule: WorkSchedule
+            var schedule: WorkSchedule
             if let existingSchedule = dataService.loadLatestSchedule(),
                existingSchedule.hitchStartDate != nil {
                 schedule = existingSchedule
+                
+                // Recalculate overtime hours for existing schedule to fix any incorrect values
+                scheduleEngine.recalculateOvertimeHours(&schedule)
+                // Save the corrected schedule
+                dataService.saveSchedule(schedule)
+                
+                // Check if the selected month is outside the schedule's date range
+                // If so, extend the schedule to include it
+                if monthStart < schedule.startDate || monthEnd > schedule.endDate {
+                    // Determine the new start date (use the earlier of current start or selected month)
+                    let newStartDate = min(schedule.startDate, monthStart)
+                    // Determine how many months we need to cover
+                    let monthsToGenerate = max(
+                        calendar.dateComponents([.month], from: newStartDate, to: monthEnd).month ?? 12,
+                        12
+                    ) + 1 // Add 1 to ensure we cover the full range
+                    
+                    // Regenerate schedule from the new start date
+                    schedule = scheduleEngine.generateSchedule(from: newStartDate, for: monthsToGenerate, hitchStartDate: existingSchedule.hitchStartDate)
+                    // Preserve the hitch start date
+                    schedule.hitchStartDate = existingSchedule.hitchStartDate
+                    // Preserve other important properties
+                    schedule.isInterrupted = existingSchedule.isInterrupted
+                    schedule.interruptionStart = existingSchedule.interruptionStart
+                    schedule.interruptionEnd = existingSchedule.interruptionEnd
+                    schedule.interruptionType = existingSchedule.interruptionType
+                    schedule.vacationBalance = existingSchedule.vacationBalance
+                    
+                    // Save the extended schedule
+                    dataService.saveSchedule(schedule)
+                }
             } else {
                 // If no valid schedule found or no hitch start date, generate a new one
                 var newSchedule = scheduleEngine.generateSchedule(from: monthStart)
@@ -51,17 +89,31 @@ class SalaryViewModel: ObservableObject {
             
             // Recalculate salary breakdown for the selected month
             let newBreakdown = salaryEngine.calculateSalary(for: schedule, baseSalary: salaryBreakdown.baseSalary, month: monthStart)
+            
+            // DIAGNOSTIC: Run diagnostics to identify issues
+            #if DEBUG
+            let diagnostics = SalaryDiagnostics.shared
+            let report = diagnostics.diagnoseOvertimeCalculation(for: schedule, month: monthStart)
+            report.printReport()
+            #endif
+            
+            // Update the salary breakdown - preserve user inputs but update calculated values and month
             salaryBreakdown.month = monthStart
             salaryBreakdown.overtimeHours = newBreakdown.overtimeHours
             salaryBreakdown.adlHours = newBreakdown.adlHours
             
+            isLoading = false
+            
+            // Force UI update by triggering objectWillChange
             objectWillChange.send()
         }
     }
     
-    func saveSalary() {
+    func saveSalary(triggerHaptics: Bool = true) {
         dataService.saveSalaryBreakdown(salaryBreakdown)
-        HapticFeedback.saveSuccess()
+        if triggerHaptics {
+            HapticFeedback.saveSuccess()
+        }
     }
     
     func updateBaseSalary(_ newSalary: Double) {
@@ -128,6 +180,20 @@ class SalaryViewModel: ObservableObject {
         salaryEngine.updateDeductionPercentages(&salaryBreakdown, homeLoan: homeLoan, espp: espp)
         saveSalary()
         checkSalaryChanges()
+    }
+    
+    // Silent update for slider - updates values without haptics
+    func updateDeductionPercentagesSilently(homeLoan: Double, espp: Double) {
+        let homeLoanValidation = ValidationUtilities.validateHomeLoanPercentage(homeLoan)
+        let esppValidation = ValidationUtilities.validateESPPPercentage(espp)
+        
+        guard homeLoanValidation.isValid && esppValidation.isValid else {
+            return
+        }
+        
+        salaryEngine.updateDeductionPercentages(&salaryBreakdown, homeLoan: homeLoan, espp: espp)
+        // Save without haptics - haptics handled in view at thresholds
+        saveSalary(triggerHaptics: false)
     }
     
     func updateSpecialOperationsPercentage(_ percentage: Double) {

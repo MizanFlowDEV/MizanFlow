@@ -145,6 +145,28 @@ class ScheduleEngine {
         return Calendar.current.startOfDay(for: date)
     }
     
+    /// Computes the next standard 14W/7O hitch start date after applying a suggestion block.
+    /// This is the source-of-truth helper that both analyzer and applier must use.
+    /// Rule: resumeDate = startOfDay(interruptionEnd + 1 day)
+    ///       suggestionBlockLength = workDays + offDays
+    ///       nextStandardStart = startOfDay(resumeDate + suggestionBlockLength days)
+    /// IMPORTANT: No extra +1 anywhere. This must exactly match how applySuggestModeSuggestion resumes baseline.
+    private func nextStandardHitchStartDate(
+        interruptionEnd: Date,
+        suggestionWorkDays: Int,
+        suggestionOffDays: Int,
+        calendar: Calendar
+    ) -> Date {
+        let end = calendar.startOfDay(for: interruptionEnd)
+        let resume = calendar.date(byAdding: .day, value: 1, to: end) ?? end
+        let total = suggestionWorkDays + suggestionOffDays
+        // The standard hitch restarts the day AFTER the suggestion block ends.
+        // If suggestion block starts on resume and lasts 'total' days,
+        // then next standard start = resume + total (NO extra +1 anywhere).
+        let nextStart = calendar.date(byAdding: .day, value: total, to: resume) ?? resume
+        return calendar.startOfDay(for: nextStart)
+    }
+    
     /// Safely checks if a date is within a range (inclusive) using normalized dates
     private func isDateInRange(_ date: Date, start: Date, end: Date) -> Bool {
         let normalizedDate = normalizeToStartOfDay(date)
@@ -313,9 +335,9 @@ class ScheduleEngine {
         // Deduct points for future simulation warnings (less severe but still important)
         score -= Double(futureSimulationWarnings.count) * 15.0
         
-        // ENHANCED: Bonus for aligning next 14W/7O restart with target return day (CRITICAL)
+        // PART 2: Bonus for aligning next 14W/7O restart with target return day (HIGHEST PRIORITY)
         if alignsWithTargetReturnDay {
-            score += 25.0 // Strong bonus for alignment
+            score += 50.0 // Highest priority bonus for alignment
         }
         
         // Bonus for standard 14W/7O pattern
@@ -361,7 +383,6 @@ class ScheduleEngine {
     ) -> [SuggestModeSuggestion] {
         var alternatives: [SuggestModeSuggestion] = []
         let calendar = Calendar.current
-        let returnDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
         
         // FIXED: Use allowed cycle set (no hardcoded "bad" cycles like 8/3)
         let allowedCycles = [
@@ -388,15 +409,21 @@ class ScheduleEngine {
                 continue
             }
             
-            // Calculate when the next standard 14W/7O cycle would start after this alternative
-            // After applying this cycle (workDays + offDays), the next 14W/7O cycle starts
-            let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
-            let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
-            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+            // PART 2: Use the source-of-truth helper to compute next standard hitch start date
+            let nextStandardStart = nextStandardHitchStartDate(
+                interruptionEnd: interruptionEnd,
+                suggestionWorkDays: cycle.workDays,
+                suggestionOffDays: cycle.offDays,
+                calendar: calendar
+            )
+            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardStart)
             let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
             
             // Check if this cycle aligns the next 14W/7O restart with target return day
             let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
+            
+            // PART 2: Debug log for each alternative
+            print("ALT \(cycle.workDays)W/\(cycle.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextCycleStartDay.description) aligns=\(alignsWithTarget)")
             
             // Validate this alternative
             let validationWarnings = validateSuggestion(
@@ -426,7 +453,7 @@ class ScheduleEngine {
             
             let isRecommended = validationWarnings.isEmpty && futureWarnings.isEmpty && alignsWithTarget
             
-            // ENHANCED: Update description to show alignment status
+            // PART 2: Update description to show alignment status - only if actually aligned
             var description = "Alternative: \(cycle.workDays)W/\(cycle.offDays)O"
             if alignsWithTarget {
                 // Use description property which returns localized name
@@ -462,13 +489,16 @@ class ScheduleEngine {
             return true
         }
         
-        // ENHANCED: Sort by alignment with target return day first, then by score
-        // Calculate alignment for each alternative explicitly
+        // PART 2: Sort by alignment with target return day first, then by score
+        // Calculate alignment for each alternative using the same helper
         let alternativesWithAlignment = alternatives.map { alt -> (alt: SuggestModeSuggestion, aligns: Bool) in
-            let totalDays = alt.workDays + alt.offDays
-            let cycleEndDate = calendar.date(byAdding: .day, value: totalDays, to: returnDate) ?? returnDate
-            let nextStandardCycleStart = calendar.date(byAdding: .day, value: 1, to: cycleEndDate) ?? cycleEndDate
-            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardCycleStart)
+            let nextStandardStart = nextStandardHitchStartDate(
+                interruptionEnd: interruptionEnd,
+                suggestionWorkDays: alt.workDays,
+                suggestionOffDays: alt.offDays,
+                calendar: calendar
+            )
+            let nextCycleStartWeekday = calendar.component(.weekday, from: nextStandardStart)
             let nextCycleStartDay = WorkSchedule.Weekday(rawValue: nextCycleStartWeekday) ?? .monday
             let aligns = (nextCycleStartDay == targetReturnDay)
             return (alt, aligns)
@@ -940,7 +970,7 @@ class ScheduleEngine {
     
     // MARK: - Schedule Generation
     
-    func generateSchedule(from startDate: Date, for months: Int = 12) -> WorkSchedule {
+    func generateSchedule(from startDate: Date, for months: Int = 12, hitchStartDate: Date? = nil) -> WorkSchedule {
         var schedule = WorkSchedule(startDate: startDate)
         let calendar = Calendar.current
         
@@ -957,7 +987,18 @@ class ScheduleEngine {
         
         // Create a pattern of 14 work days followed by 7 off days
         let hitchCycle = 21 // 14 on, 7 off
-        var dayInCycle = 0
+        
+        // Calculate initial dayInCycle based on hitchStartDate if provided
+        var dayInCycle: Int
+        if let hitchStart = hitchStartDate {
+            // Normalize dates for accurate day calculation
+            let normalizedHitchStart = normalizeToStartOfDay(hitchStart)
+            let normalizedStartDate = normalizeToStartOfDay(startDate)
+            let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedStartDate).day ?? 0
+            dayInCycle = (daysSinceHitchStart % hitchCycle + hitchCycle) % hitchCycle // Ensure positive
+        } else {
+            dayInCycle = 0
+        }
         
         while currentDate <= endDate {
             // First, determine day type based on 14/7 pattern
@@ -1206,7 +1247,7 @@ class ScheduleEngine {
         let calendar = Calendar.current
         for i in 0..<schedule.days.count {
             let day = schedule.days[i]
-            if day.date >= startDate && day.date <= endDate {
+            if isDateInRange(day.date, start: startDate, end: endDate) {
                 let dayPosition = calendar.dateComponents([.day], from: schedule.startDate, to: day.date).day! % 21
                 // Check if this would normally be an off day (days 14-20 in cycle)
                 if dayPosition >= 14 {
@@ -1397,6 +1438,21 @@ class ScheduleEngine {
         interruptionEnd: Date,
         interruptionType: WorkSchedule.InterruptionType
     ) {
+        // #region agent log
+        let logEntry = "{\"location\":\"ScheduleEngine.swift:1393\",\"message\":\"applySuggestModeSuggestion ENTRY\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays),\"score\":\(suggestion.score)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H3\"}\n"
+        if let data = logEntry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        print("🔍 DEBUG: ScheduleEngine.applySuggestModeSuggestion called with: \(suggestion.workDays)W/\(suggestion.offDays)O")
+        // #endregion
         let calendar = Calendar.current
         let normalizedStart = normalizeToStartOfDay(interruptionStart)
         let normalizedEnd = normalizeToStartOfDay(interruptionEnd)
@@ -1468,6 +1524,21 @@ class ScheduleEngine {
         
         var currentIndex = resumeIndex
         
+        // #region agent log
+        let logWork = "{\"location\":\"ScheduleEngine.swift:1511\",\"message\":\"About to apply work days\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays),\"resumeIndex\":\(resumeIndex)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H3\"}\n"
+        if let data = logWork.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        print("🔍 DEBUG: ScheduleEngine applying: \(suggestion.workDays)W/\(suggestion.offDays)O starting at index \(resumeIndex)")
+        // #endregion
         // Apply work days from suggestion
         for _ in 0..<suggestion.workDays {
             if currentIndex < schedule.days.count {
@@ -1490,9 +1561,35 @@ class ScheduleEngine {
             }
         }
         
-        // C3: Resume standard 14W/7O after the suggestion segment
-        if currentIndex < schedule.days.count {
-            applyStandard14_7Pattern(&schedule, startingFrom: currentIndex)
+        // PART 2: Compute next standard hitch start date using the same helper as analyzer
+        let nextStandardStart = nextStandardHitchStartDate(
+            interruptionEnd: interruptionEnd,
+            suggestionWorkDays: suggestion.workDays,
+            suggestionOffDays: suggestion.offDays,
+            calendar: calendar
+        )
+        
+        // PART 2: Find the index that corresponds to nextStandardStart date
+        let nextStandardWeekday = calendar.component(.weekday, from: nextStandardStart)
+        let nextStandardDay = WorkSchedule.Weekday(rawValue: nextStandardWeekday) ?? .monday
+        
+        guard let nextStandardIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: nextStandardStart) }) else {
+            print("⚠️ Could not find next standard start date in schedule, using currentIndex")
+            // Fallback to currentIndex if date not found
+            if currentIndex < schedule.days.count {
+                applyStandard14_7Pattern(&schedule, startingFrom: currentIndex)
+            }
+            // PART 2: Debug log even in fallback case
+            print("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description) (FALLBACK to index \(currentIndex))")
+            return
+        }
+        
+        // PART 2: Debug log
+        print("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description)")
+        
+        // PART 2: Resume standard 14W/7O from the exact nextStandardStart date (not currentIndex)
+        if nextStandardIndex < schedule.days.count {
+            applyStandard14_7Pattern(&schedule, startingFrom: nextStandardIndex)
         }
         
         // PART E: Add definitive debug log to prove binding works
@@ -1512,7 +1609,8 @@ class ScheduleEngine {
            Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
            Earned Off Used: \(earnedOffUsed) of \(earnedDays) available
            Vacation Used: \(vacationUsed)
-           Baseline 14W/7O resumes from index \(currentIndex)
+           Next Standard Start: \(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description))
+           Baseline 14W/7O resumes from index \(nextStandardIndex)
         """)
         
         // Verify the applied segment matches the suggestion
@@ -1535,7 +1633,8 @@ class ScheduleEngine {
            Applied Segment Start: \(dateFormatter.string(from: resumeDate))
            Applied Segment: \(suggestion.workDays) work, \(suggestion.offDays) off
            Verified Applied: \(appliedWorkDays) work, \(appliedOffDays) off ✅
-           Standard 14W/7O resumes from index \(currentIndex)
+           Next Standard Start: \(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description))
+           Standard 14W/7O resumes from index \(nextStandardIndex)
         """)
         
         // Verify the pattern matches
@@ -1916,7 +2015,7 @@ class ScheduleEngine {
             
             for i in 0..<schedule.days.count {
                 let day = schedule.days[i]
-                if day.date >= startDate && day.date <= endDate {
+                if isDateInRange(day.date, start: startDate, end: endDate) {
                     schedule.days[i].type = .workday
                     schedule.days[i].notes = "Rescheduled workday (micro-cycle)"
                     schedule.days[i].isOverride = false
@@ -1932,7 +2031,7 @@ class ScheduleEngine {
             
             for i in 0..<schedule.days.count {
                 let day = schedule.days[i]
-                if day.date >= startDate && day.date <= endDate {
+                if isDateInRange(day.date, start: startDate, end: endDate) {
                     schedule.days[i].type = .earnedOffDay
                     schedule.days[i].notes = "Earned off day (micro-cycle)"
                     schedule.days[i].isOverride = false
@@ -1945,7 +2044,7 @@ class ScheduleEngine {
         if let training = plan.trainingPlacement {
             for i in 0..<schedule.days.count {
                 let day = schedule.days[i]
-                if day.date >= training.start && day.date <= training.end {
+                if isDateInRange(day.date, start: training.start, end: training.end) {
                     schedule.days[i].type = .training
                     schedule.days[i].notes = "Training (rescheduled to work period)"
                     schedule.days[i].isOverride = false
@@ -2367,7 +2466,7 @@ class ScheduleEngine {
         // Reset all days from the interruption period and after
         for i in 0..<schedule.days.count {
             let day = schedule.days[i]
-            if day.date >= start {
+            if normalizeToStartOfDay(day.date) >= normalizeToStartOfDay(start) {
                 // Calculate the correct day type based on the 14/7 cycle
                 let calendar = Calendar.current
                 let daysSinceStart = calendar.dateComponents([.day], from: originalStartDate, to: day.date).day ?? 0
@@ -2415,8 +2514,69 @@ class ScheduleEngine {
     // Function to get the current day in the hitch cycle (0-20)
     func getCurrentHitchDay(_ schedule: WorkSchedule, for date: Date) -> Int {
         let calendar = Calendar.current
-        let daysSinceStart = calendar.dateComponents([.day], from: schedule.startDate, to: date).day ?? 0
-        return daysSinceStart % 21
+        let hitchStartDate = schedule.hitchStartDate ?? schedule.startDate
+        let normalizedHitchStart = normalizeToStartOfDay(hitchStartDate)
+        let normalizedDate = normalizeToStartOfDay(date)
+        let daysSinceStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDate).day ?? 0
+        return (daysSinceStart % 21 + 21) % 21 // Ensure positive
+    }
+    
+    // MARK: - Recalculate Overtime Hours
+    
+    /// Recalculates overtime and ADL hours for all days in a schedule based on the hitch start date
+    /// This fixes schedules that were generated before the hitchStartDate fix
+    /// CRITICAL FIX: Also corrects day.type if it doesn't match the dayInCycle pattern
+    func recalculateOvertimeHours(_ schedule: inout WorkSchedule) {
+        guard let hitchStartDate = schedule.hitchStartDate else {
+            AppLogger.engine.warning("Cannot recalculate overtime: hitchStartDate is nil")
+            return // Can't recalculate without hitch start date
+        }
+        
+        let calendar = Calendar.current
+        let normalizedHitchStart = normalizeToStartOfDay(hitchStartDate)
+        let hitchCycle = 21 // 14 on, 7 off
+        
+        AppLogger.engine.info("Recalculating overtime hours. Hitch start: \(hitchStartDate.formatted(date: .abbreviated, time: .omitted))")
+        
+        for i in 0..<schedule.days.count {
+            let day = schedule.days[i]
+            let normalizedDayDate = normalizeToStartOfDay(day.date)
+            
+            // Calculate dayInCycle based on hitch start date
+            let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDayDate).day ?? 0
+            let dayInCycle = (daysSinceHitchStart % hitchCycle + hitchCycle) % hitchCycle // Ensure positive
+            
+            // CRITICAL FIX: Determine what the day type SHOULD be based on dayInCycle
+            let expectedType = determineDayTypeInHitchPattern(dayInCycle)
+            
+            // Check if day type needs correction (unless it's a holiday or override)
+            let isHolidayType = (day.type == .eidHoliday || day.type == .nationalDay || day.type == .foundingDay)
+            
+            if !day.isOverride && !isHolidayType && day.type != expectedType {
+                // Day type is wrong - correct it FIRST before calculating overtime
+                schedule.days[i].type = expectedType
+                AppLogger.engine.info("Corrected day type for \(day.date.formatted(date: .numeric, time: .omitted)): was \(day.type.rawValue), now \(expectedType.rawValue), dayInCycle=\(dayInCycle)")
+            }
+            
+            // Recalculate overtime based on dayInCycle, regardless of current day.type
+            if dayInCycle < 14 && !day.isOverride {
+                // This is a workday in the cycle - calculate overtime
+                let isHoliday = holidayService.isPublicHoliday(day.date)
+                let overtime = computeOvertime(for: expectedType, dayInCycle: dayInCycle, isHoliday: isHoliday)
+                let adl = computeAdl(for: expectedType, dayInCycle: dayInCycle, isHoliday: isHoliday)
+                
+                schedule.days[i].overtimeHours = overtime
+                schedule.days[i].adlHours = adl
+                schedule.days[i].isInHitch = true
+            } else if dayInCycle >= 14 && !day.isOverride {
+                // This is an off day in the cycle - zero overtime
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
+            }
+        }
+        
+        AppLogger.engine.info("Overtime recalculation complete")
     }
     
     // MARK: - Holiday Pay Handling
