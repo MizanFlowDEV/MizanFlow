@@ -61,44 +61,16 @@ class DataPersistenceService {
     // MARK: - Schedule Operations
     
     func saveSchedule(_ schedule: WorkSchedule) {
-        // #region agent log
-        let logEntry = "{\"location\":\"DataPersistenceService.swift:63\",\"message\":\"saveSchedule ENTRY\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"hitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
-        if let data = logEntry.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-            }
-        }
-        // #endregion
-        
         // Check if schedule already exists
         let request: NSFetchRequest<ScheduleEntity> = ScheduleEntity.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", schedule.id as CVarArg)
         request.fetchLimit = 1
         
         var scheduleEntity: ScheduleEntity
-        var isNewEntity = false
+        let isUpdate: Bool
         if let existingEntity = try? context.fetch(request).first {
             scheduleEntity = existingEntity
-            // #region agent log
-            let logUpdate = "{\"location\":\"DataPersistenceService.swift:check\",\"message\":\"Found existing entity - UPDATING\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"oldHitchStartDate\":\"\(existingEntity.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"newHitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
-            if let data = logUpdate.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        fileHandle.closeFile()
-                    }
-                } else {
-                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                }
-            }
-            // #endregion
+            isUpdate = true
             
             // Delete old days before updating
             if let oldDays = existingEntity.days as? Set<ScheduleDayEntity> {
@@ -108,21 +80,7 @@ class DataPersistenceService {
             }
         } else {
             scheduleEntity = ScheduleEntity(context: context)
-            isNewEntity = true
-            // #region agent log
-            let logNew = "{\"location\":\"DataPersistenceService.swift:check\",\"message\":\"Creating NEW entity\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"hitchStartDate\":\"\(schedule.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
-            if let data = logNew.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        fileHandle.closeFile()
-                    }
-                } else {
-                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                }
-            }
-            // #endregion
+            isUpdate = false
         }
         
         scheduleEntity.id = schedule.id
@@ -152,22 +110,9 @@ class DataPersistenceService {
             dayEntity.schedule = scheduleEntity
         }
         
-        // #region agent log
-        let logExit = "{\"location\":\"DataPersistenceService.swift:155\",\"message\":\"saveSchedule EXIT\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"isNewEntity\":\(isNewEntity),\"savedHitchStartDate\":\"\(scheduleEntity.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}\n"
-        if let data = logExit.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-            }
-        }
-        // #endregion
-        
+        AppLogger.coreData.debug("Saving schedule: id=\(schedule.id.uuidString, privacy: .public), days=\(schedule.days.count), isUpdate=\(isUpdate)")
         saveContext()
+        AppLogger.coreData.info("Successfully saved schedule: id=\(schedule.id.uuidString, privacy: .public), days=\(schedule.days.count)")
     }
     
     func saveScheduleInBackground(_ schedule: WorkSchedule) {
@@ -242,7 +187,10 @@ class DataPersistenceService {
         
         do {
             let results = try context.fetch(request)
-            guard let scheduleEntity = results.first else { return nil }
+            guard let scheduleEntity = results.first else {
+                AppLogger.coreData.debug("Schedule not found: id=\(id.uuidString, privacy: .public)")
+                return nil
+            }
             
             var schedule = convertToWorkSchedule(from: scheduleEntity)
             
@@ -254,6 +202,7 @@ class DataPersistenceService {
             // Load vacation balance from Core Data
             schedule.vacationBalance = Int(scheduleEntity.vacationBalance)
             
+            AppLogger.coreData.debug("Successfully loaded schedule: id=\(id.uuidString, privacy: .public), days=\(schedule.days.count)")
             return schedule
         } catch {
             AppLogger.coreData.error("Error loading schedule: \(String(describing: error), privacy: .public)")
@@ -277,22 +226,10 @@ class DataPersistenceService {
         do {
             let results = try context.fetch(request)
             
-            // #region agent log
-            let logLoad = "{\"location\":\"DataPersistenceService.swift:168\",\"message\":\"loadLatestSchedule result\",\"data\":{\"resultCount\":\(results.count),\"scheduleId\":\"\(results.first?.id?.uuidString ?? "nil")\",\"hitchStartDate\":\"\(results.first?.hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"startDate\":\"\(results.first?.startDate?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}\n"
-            if let data = logLoad.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        fileHandle.closeFile()
-                    }
-                } else {
-                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                }
+            guard let scheduleEntity = results.first else {
+                AppLogger.coreData.debug("No schedule found in database")
+                return nil
             }
-            // #endregion
-            
-            guard let scheduleEntity = results.first else { return nil }
             
             var schedule = convertToWorkSchedule(from: scheduleEntity)
             
@@ -307,6 +244,7 @@ class DataPersistenceService {
             // Recompute interruption data if needed
             recomputeInterruptionDataIfNeeded(&schedule)
             
+            AppLogger.coreData.debug("Successfully loaded latest schedule: id=\(schedule.id.uuidString, privacy: .public), days=\(schedule.days.count), startDate=\(schedule.startDate.formatted(date: .abbreviated, time: .omitted)), endDate=\(schedule.endDate.formatted(date: .abbreviated, time: .omitted))")
             return schedule
         } catch {
             AppLogger.coreData.error("Error loading latest schedule: \(String(describing: error), privacy: .public)")
@@ -395,6 +333,10 @@ class DataPersistenceService {
         breakdownEntity.homeLoanPercentage = breakdown.homeLoanPercentage
         breakdownEntity.esppPercentage = breakdown.esppPercentage
         
+        // Note: New fields (housingAllowanceType, housingAllowanceAmount, housingAllowancePercentage, workDaysRatio)
+        // will be saved when Core Data model is updated. For now, they use defaults when loading.
+        // workScheduleSummary is calculated and doesn't need persistence.
+        
         // Save additional income
         for income in breakdown.additionalIncome {
             let incomeEntity = AdditionalEntryEntity(context: context)
@@ -447,6 +389,10 @@ class DataPersistenceService {
         breakdown.specialOperationsPercentage = entity.specialOperationsPercentage
         breakdown.homeLoanPercentage = entity.homeLoanPercentage
         breakdown.esppPercentage = entity.esppPercentage
+        
+        // Backward compatibility: New fields use defaults from init()
+        // housingAllowanceType = .fixed, housingAllowanceAmount = 0, housingAllowancePercentage = 0
+        // workDaysRatio = 1.0, workScheduleSummary = nil (will be recalculated)
         
         if let entries = entity.entries as? Set<AdditionalEntryEntity> {
             for entry in entries {

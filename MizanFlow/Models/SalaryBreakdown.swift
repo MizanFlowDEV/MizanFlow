@@ -8,16 +8,41 @@ struct SalaryBreakdown: Identifiable, Codable {
     var adlHours: Double
     var specialOperationsPercentage: Double // 5%, 7%, or 10%
     
+    // Housing Allowance
+    var housingAllowanceType: HousingAllowanceType = .fixed
+    var housingAllowanceAmount: Double = 0 // For fixed type
+    var housingAllowancePercentage: Double = 0 // For percentage type
+    
+    // Work days ratio for proration (0.0 to 1.0, default 1.0)
+    var workDaysRatio: Double = 1.0
+    
     // Allowances
     var remoteAllowance: Double {
-        baseSalary * 0.14
+        (baseSalary * 0.14) * workDaysRatio
     }
     
     var specialOperationsAllowance: Double {
-        baseSalary * (specialOperationsPercentage / 100)
+        (baseSalary * (specialOperationsPercentage / 100)) * workDaysRatio
     }
     
-    var transportationAllowance: Double = 1000 // Fixed 1000 SAR
+    /// Housing Allowance: Paid once a year in December only
+    /// Formula: max(3 × baseSalary, 40,000)
+    /// No proration - it's a lump sum payment
+    var housingAllowance: Double {
+        let calendar = Calendar.current
+        let month = calendar.component(.month, from: self.month)
+        
+        // Only calculate if December (month 12)
+        guard month == 12 else {
+            return 0.0
+        }
+        
+        // Formula: max(3 × baseSalary, 40,000)
+        let threeTimesBase = baseSalary * 3.0
+        return max(threeTimesBase, 40_000.0)
+    }
+    
+    var transportationAllowance: Double = 1000 // Fixed 1000 SAR (no proration)
     
     // Deductions
     var homeLoanPercentage: Double // 25% to 50%
@@ -43,18 +68,39 @@ struct SalaryBreakdown: Identifiable, Codable {
     var additionalIncome: [AdditionalEntry]
     var customDeductions: [AdditionalEntry]
     
-    // Calculations
-    var overtimePay: Double {
-        // Single overtime rate for all types
-        return 0.00616438 * baseSalary * overtimeHours
+    // MARK: - Base Rate Calculations
+    // Based on Saudi Aramco HR Manual: Standard Hourly Rate = Annual Base Salary ÷ 2,920 hours
+    // Where 2,920 = 365 days × 8 hours (straight time annualized hours)
+    
+    /// Standard Hourly Rate calculated as (Annual Base Salary) ÷ 2,920 hours
+    var standardHourlyRate: Double {
+        (baseSalary * 12) / 2920
     }
     
+    /// Overtime Premium Rate calculated as Standard Hourly Rate × 1.5 (150% premium)
+    var overtimePremiumRate: Double {
+        standardHourlyRate * 1.5
+    }
+    
+    /// Straight Time Hourly Rate (same as Standard Hourly Rate, used for ADL calculations)
+    var straightTimeHourlyRate: Double {
+        standardHourlyRate
+    }
+    
+    // MARK: - Payment Calculations
+    
+    /// Overtime Pay calculated as Overtime Hours × Overtime Premium Rate
+    var overtimePay: Double {
+        overtimeHours * overtimePremiumRate
+    }
+    
+    /// Additional Straight Time (ADL) Pay calculated as ADL Hours × Straight Time Hourly Rate
     var adlPay: Double {
-        0.0041096 * baseSalary * adlHours
+        adlHours * straightTimeHourlyRate
     }
     
     var totalAllowances: Double {
-        remoteAllowance + specialOperationsAllowance + transportationAllowance
+        remoteAllowance + specialOperationsAllowance + housingAllowance + transportationAllowance
     }
     
     var totalDeductions: Double {
@@ -79,6 +125,17 @@ struct SalaryBreakdown: Identifiable, Codable {
         var notes: String?
     }
     
+    // MARK: - Work Schedule Summary
+    
+    struct WorkScheduleSummary: Codable {
+        var paidHours: Double // Work days × 8 hours
+        var paidLeaveHours: Double // Leave/vacation days × 8 hours
+        var straightTimeHours: Double // ADL hours
+        var premiumHours: Double // Overtime hours
+    }
+    
+    var workScheduleSummary: WorkScheduleSummary?
+    
     init(baseSalary: Double, month: Date) {
         self.id = UUID()
         self.baseSalary = baseSalary
@@ -90,6 +147,11 @@ struct SalaryBreakdown: Identifiable, Codable {
         self.esppPercentage = 1
         self.additionalIncome = []
         self.customDeductions = []
+        self.housingAllowanceType = .fixed
+        self.housingAllowanceAmount = 0
+        self.housingAllowancePercentage = 0
+        self.workDaysRatio = 1.0
+        self.workScheduleSummary = nil
     }
     
     // CodingKeys for computed properties that shouldn't be encoded
@@ -104,5 +166,17 @@ struct SalaryBreakdown: Identifiable, Codable {
         case esppPercentage
         case additionalIncome
         case customDeductions
+        case housingAllowanceType
+        case housingAllowanceAmount
+        case housingAllowancePercentage
+        case workDaysRatio
+        case workScheduleSummary
     }
+}
+
+// MARK: - Housing Allowance Type
+
+enum HousingAllowanceType: String, Codable {
+    case fixed
+    case percentage
 } 

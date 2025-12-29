@@ -80,7 +80,8 @@ class Settings: ObservableObject {
     private func updateLocalization() {
         // Update the app's locale
         UserDefaults.standard.set([language.rawValue], forKey: "AppleLanguages")
-        UserDefaults.standard.synchronize()
+        // Note: synchronize() is deprecated and can cause performance issues
+        // UserDefaults auto-synchronizes, so we can remove this call
         
         // Update date formatters
         let dateFormatter = DateFormatter()
@@ -93,7 +94,8 @@ class Settings: ObservableObject {
         numberFormatter.locale = language.locale
         numberFormatter.numberStyle = .decimal
         
-        // Post notification for views to update
+        // Post notification for views to update (only if needed)
+        // Note: SwiftUI's @Published will handle most updates automatically
         NotificationCenter.default.post(name: NSNotification.Name("LanguageChanged"), object: nil)
     }
 } 

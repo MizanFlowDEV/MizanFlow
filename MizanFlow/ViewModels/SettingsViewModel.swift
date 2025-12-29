@@ -16,25 +16,26 @@ class SettingsViewModel: ObservableObject {
     }
     
     func updateLanguage(_ language: Settings.Language) {
+        // Only update if language actually changed
+        guard settings.language != language else { return }
+        
         settings.language = language
         updateLayoutDirection()
         
         // Show SwiftUI alert to confirm restart
         showingLanguageRestartAlert = true
-        // Force UI update
-        DispatchQueue.main.async {
-            self.objectWillChange.send()
-            NotificationCenter.default.post(name: NSNotification.Name("LanguageChanged"), object: nil)
-        }
+        // Note: No need to manually call objectWillChange or post notification
+        // The @Published property will automatically trigger updates
+        // Settings.updateLocalization() already posts the notification
     }
     
     func updateTheme(_ theme: Settings.Theme) {
+        // Only update if theme actually changed
+        guard settings.theme != theme else { return }
+        
         settings.theme = theme
-        // Force UI update
-        DispatchQueue.main.async {
-            self.objectWillChange.send()
-            NotificationCenter.default.post(name: NSNotification.Name("ThemeChanged"), object: nil)
-        }
+        // Note: No need to manually call objectWillChange
+        // The @Published property will automatically trigger updates
     }
     
     func toggleNotifications() {
@@ -49,9 +50,12 @@ class SettingsViewModel: ObservableObject {
     }
     
     private func updateLayoutDirection() {
-        // In a real app, this would update the app's layout direction
-        // For now, we'll just print the new direction
-        print("Layout direction updated to: \(settings.language.layoutDirection)")
+        // Layout direction is handled automatically by SwiftUI's environment modifier
+        // No action needed here - the .environment(\.layoutDirection) in MizanFlowApp
+        // will automatically update when settings.language changes
+        #if DEBUG
+        AppLogger.viewModel.debug("Layout direction updated to: \(self.settings.language.layoutDirection == .leftToRight ? "LTR" : "RTL")")
+        #endif
     }
     
     // MARK: - Formatting Methods
@@ -107,7 +111,7 @@ class SettingsViewModel: ObservableObject {
             encoder.outputFormatting = .prettyPrinted
             return try encoder.encode(exportSettings)
         } catch {
-            print("Failed to encode settings: \(error)")
+            AppLogger.viewModel.error("Failed to encode settings: \(error.localizedDescription)")
             return nil
         }
     }

@@ -13,6 +13,7 @@ struct MizanFlowApp: App {
     @StateObject private var settingsViewModel = SettingsViewModel()
     @StateObject private var scheduleViewModel = WorkScheduleViewModel()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var hasInitialized = false
 
     var body: some Scene {
         WindowGroup {
@@ -31,20 +32,30 @@ struct MizanFlowApp: App {
                     Color.clear.frame(height: 0)
                 }
                 .onChange(of: settingsViewModel.settings.theme) { oldValue, newValue in
-                    updateAppTheme()
+                    // Only update if theme actually changed
+                    if oldValue != newValue {
+                        updateAppTheme()
+                    }
                 }
                 .onChange(of: settingsViewModel.settings.language) { oldValue, newValue in
-                    updateAppLanguage()
+                    // Only update if language actually changed and we've initialized
+                    if oldValue != newValue && hasInitialized {
+                        updateAppLanguage()
+                    }
                 }
                 .onAppear {
-                    updateAppTheme()
-                    updateAppLanguage()
+                    // Only initialize once
+                    if !hasInitialized {
+                        updateAppTheme()
+                        updateAppLanguage()
+                        hasInitialized = true
+                    }
                 }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
+                // Only update theme on scene activation, language doesn't need to be updated
                 updateAppTheme()
-                updateAppLanguage()
             } else if newPhase == .background {
                 // Save all changes when app goes to background
                 dataService.saveContext()
@@ -82,11 +93,13 @@ struct MizanFlowApp: App {
     }
     
     private func updateAppLanguage() {
-        // Print for debugging
-        print("Updating language to: \(settingsViewModel.settings.language.rawValue)")
-        print("Layout direction: \(settingsViewModel.settings.language.layoutDirection)")
+        // Log language update
+        #if DEBUG
+        AppLogger.general.debug("Updating language to: \(settingsViewModel.settings.language.rawValue), Layout direction: \(settingsViewModel.settings.language.layoutDirection == .leftToRight ? "LTR" : "RTL")")
+        #endif
         
-        // Force view refresh
-        settingsViewModel.objectWillChange.send()
+        // Note: No need to manually call objectWillChange here
+        // SwiftUI will automatically update when the @Published property changes
+        // The layoutDirection environment value will update automatically via the .environment modifier
     }
 }

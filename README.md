@@ -44,6 +44,37 @@ MizanFlow is a native iOS app built with SwiftUI that helps shift workers manage
 - **Additional Income**: Track extra income sources
 - **Net Pay Calculation**: Automatic calculation of total compensation minus deductions
 
+### 📋 HR Policy Compliance
+
+MizanFlow follows official **HR Manual** policies for salary calculations:
+
+#### Hourly Rate Calculations
+
+- **Standard Hourly Rate**: Calculated as (Annual Base Salary) ÷ 2,920 hours
+  - Where 2,920 = 365 days × 8 hours (straight time annualized hours)
+- **Overtime Premium Rate**: Standard Hourly Rate × 1.5 (150% premium)
+- **Straight Time Hourly Rate**: Same as Standard Hourly Rate (used for ADL calculations)
+
+#### Allowances (Per HR Policy)
+
+- **Remote Location Allowance**: 14% of base salary
+- **Special Operations Allowance**: 5%, 7%, or 10% of base salary (as per assignment)
+- **Transportation Allowance**: Fixed 1,000 SAR per month
+
+#### Mandatory Deductions
+
+- **GOSI (General Organization for Social Insurance)**: 11.25% of base salary
+- **SANID (Saudi National ID)**: 0.93% of base salary
+- **Home Loan**: 25% to 50% of base salary (employee configurable)
+- **ESPP (Employee Stock Purchase Plan)**: 1% to 10% of base salary (employee configurable)
+
+#### Overtime & ADL Calculations
+
+- **Overtime Pay**: Overtime Hours × Overtime Premium Rate (1.5× standard rate)
+- **ADL Pay**: ADL Hours × Straight Time Hourly Rate (1.0× standard rate)
+
+All calculations are performed according to the official HR Manual guidelines to ensure accuracy and compliance.
+
 ### 💵 Budget Tracker
 
 - **Income & Expenses**: Track both income and expenses in one place
@@ -101,6 +132,7 @@ MizanFlow is a native iOS app built with SwiftUI that helps shift workers manage
 ```
 MizanFlow/
 ├── MizanFlowApp.swift          # App entry point
+├── Persistence.swift           # Core Data persistence controller
 ├── Models/                      # Data models
 │   ├── BudgetEntry.swift
 │   ├── SalaryBreakdown.swift
@@ -128,7 +160,8 @@ MizanFlow/
 │   ├── HolidayService.swift
 │   ├── BackupService.swift
 │   ├── DataPersistenceService.swift
-│   └── SmartAlertService.swift
+│   ├── SmartAlertService.swift
+│   └── SalaryDiagnostics.swift
 ├── Utilities/                 # Helper utilities
 │   ├── AppLogger.swift
 │   ├── ColorTheme.swift
@@ -172,6 +205,7 @@ MizanFlow/
 - **BackupService**: Handles data export and import
 - **DataPersistenceService**: Manages Core Data operations
 - **SmartAlertService**: Provides intelligent notifications and alerts
+- **SalaryDiagnostics**: Diagnostic tool to trace and debug salary calculation issues
 
 ## 🚀 Getting Started
 

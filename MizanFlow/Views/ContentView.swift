@@ -32,7 +32,7 @@ struct ContentView: View {
                 .tag(3)
         }
         .accentColor(settingsViewModel.getThemeColor())
-        .environment(\.layoutDirection, settingsViewModel.settings.language.layoutDirection)
+        // Note: layoutDirection is already set in MizanFlowApp, no need to set it again here
     }
 }
 

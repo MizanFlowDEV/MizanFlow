@@ -1,33 +1,35 @@
 import SwiftUI
 
 /// Centralized color theme for DayType - ensures consistent colors across all views
+/// Uses DesignTokens for light/dark aware colors
 struct ColorTheme {
     
     /// Returns the background color for a given DayType
+    /// Uses subtle opacity for better readability
     static func backgroundColor(for type: DayType) -> Color {
         switch type {
         case .workday:
-            return Color.green.opacity(0.3)
+            return DesignTokens.Color.workday.opacity(0.2)
         case .earnedOffDay:
-            return Color.gray.opacity(0.3)
+            return DesignTokens.Color.offDay.opacity(0.2)
         case .vacation:
-            return Color.yellow.opacity(0.3)
+            return DesignTokens.Color.vacation.opacity(0.2)
         case .training:
-            return Color.orange.opacity(0.3)
+            return DesignTokens.Color.training.opacity(0.2)
         case .eidHoliday:
-            return Color.yellow
+            return DesignTokens.Color.vacation.opacity(0.4)
         case .nationalDay:
-            return Color.blue.opacity(0.7)
+            return DesignTokens.Color.holiday.opacity(0.4)
         case .foundingDay:
-            return Color.purple.opacity(0.5)
+            return DesignTokens.Color.holiday.opacity(0.35)
         case .autoRescheduled:
-            return Color.blue.opacity(0.3)
+            return DesignTokens.Color.holiday.opacity(0.2)
         case .companyOff:
-            return Color.teal.opacity(0.3)
+            return DesignTokens.Color.offDay.opacity(0.25)
         case .manualOverride:
-            return Color.red.opacity(0.3)
+            return DesignTokens.Color.override.opacity(0.2)
         case .ramadan:
-            return Color.gray.opacity(0.5)
+            return DesignTokens.Color.offDay.opacity(0.3)
         }
     }
     
@@ -35,9 +37,10 @@ struct ColorTheme {
     static func textColor(for type: DayType) -> Color {
         switch type {
         case .eidHoliday, .nationalDay, .foundingDay:
-            return .black
+            // Use high contrast text for prominent holidays
+            return DesignTokens.Color.textPrimary
         default:
-            return .primary
+            return DesignTokens.Color.textPrimary
         }
     }
     
@@ -45,33 +48,38 @@ struct ColorTheme {
     static func foregroundColor(for type: DayType) -> Color {
         switch type {
         case .workday:
-            return Color.green
+            return DesignTokens.Color.workday
         case .earnedOffDay:
-            return Color.gray
+            return DesignTokens.Color.offDay
         case .vacation:
-            return Color.yellow
+            return DesignTokens.Color.vacation
         case .training:
-            return Color.orange
+            return DesignTokens.Color.training
         case .eidHoliday:
-            return Color.yellow
+            return DesignTokens.Color.vacation
         case .nationalDay:
-            return Color.blue
+            return DesignTokens.Color.holiday
         case .foundingDay:
-            return Color.purple
+            return DesignTokens.Color.holiday
         case .autoRescheduled:
-            return Color.blue
+            return DesignTokens.Color.holiday
         case .companyOff:
-            return Color.teal
+            return DesignTokens.Color.offDay
         case .manualOverride:
-            return Color.red
+            return DesignTokens.Color.override
         case .ramadan:
-            return Color.gray
+            return DesignTokens.Color.offDay
         }
     }
     
     /// Returns the legend color for a given DayType (used in calendar legend)
     static func legendColor(for type: DayType) -> Color {
         return backgroundColor(for: type)
+    }
+    
+    /// Returns the indicator color for a given DayType (for calendar cell indicators)
+    static func indicatorColor(for type: DayType) -> Color {
+        return foregroundColor(for: type)
     }
 }
 

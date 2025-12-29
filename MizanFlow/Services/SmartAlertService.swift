@@ -44,9 +44,9 @@ class SmartAlertService {
     func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("Notification permission granted")
+                AppLogger.general.info("Notification permission granted")
             } else if let error = error {
-                print("Error requesting notification permission: \(error.localizedDescription)")
+                AppLogger.general.error("Error requesting notification permission: \(error.localizedDescription)")
             }
         }
     }
@@ -74,7 +74,7 @@ class SmartAlertService {
         
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Error scheduling notification: \(error.localizedDescription)")
+                AppLogger.general.error("Error scheduling notification: \(error.localizedDescription)")
             }
         }
     }

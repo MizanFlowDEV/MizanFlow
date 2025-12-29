@@ -16,66 +16,82 @@ struct DayDetailView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Day Information")) {
+                Section(header: Text("Day Information")
+                    .font(DesignTokens.Typography.sectionTitle)) {
                     HStack {
                         Text("Date:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(formattedDate)
-                            .foregroundColor(.secondary)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
                     }
                     
                     HStack {
                         Text("Type:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(viewModel.getDayDescription(for: dayType))
+                            .font(DesignTokens.Typography.body)
                             .foregroundColor(getColorForDayType())
                     }
                     
                     if isOverride {
                         HStack {
                             Text("Manual Override:")
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                             Text("Yes")
-                                .foregroundColor(.red)
+                                .font(DesignTokens.Typography.body)
+                                .foregroundColor(DesignTokens.Color.error)
                         }
                     }
                     
                     HStack {
                         Text("Hitch Position:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(getHitchPositionDescription())
-                            .foregroundColor(hitchPosition < 14 ? .blue : .gray)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(hitchPosition < 14 ? DesignTokens.Color.primary : DesignTokens.Color.textSecondary)
                     }
                     
                     if let overtime = viewModel.getOvertimeHours(for: date), overtime > 0 {
                         HStack {
                             Text("Overtime Hours:")
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                             Text("\(Int(overtime)) hrs")
-                                .foregroundColor(.green)
+                                .font(DesignTokens.Typography.body)
+                                .foregroundColor(DesignTokens.Color.success)
                         }
                     }
                     
                     if viewModel.hasIcon(for: date), let iconName = viewModel.getIconName(for: date) {
                         HStack {
                             Text("Special Mark:")
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                             Image(systemName: iconName)
-                                .foregroundColor(.primary)
+                                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                                .foregroundColor(DesignTokens.Color.textPrimary)
                         }
                     }
                 }
                 
                 if let notes = notes, !notes.isEmpty {
-                    Section(header: Text("Notes")) {
+                    Section(header: Text("Notes")
+                        .font(DesignTokens.Typography.sectionTitle)) {
                         Text(notes)
-                            .foregroundColor(.secondary)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
                     }
                 }
                 
                 // Only show manual override options if not already overridden
                 // or if user is viewing an overridden day
-                Section(header: Text("Manual Override")) {
+                Section(header: Text("Manual Override")
+                    .font(DesignTokens.Typography.sectionTitle)) {
                     Picker("Change Type To:", selection: $selectedType) {
                         Text("Workday").tag(DayType.workday)
                         Text("Earned Off Day").tag(DayType.earnedOffDay)
@@ -85,12 +101,14 @@ struct DayDetailView: View {
                     }
                     
                     TextField("Override Notes", text: $customNotes)
+                        .font(DesignTokens.Typography.body)
                     
                     Button(action: {
                         showingOverrideConfirmation = true
                     }) {
                         Text("Apply Override")
-                            .foregroundColor(.blue)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.primary)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .alert(isPresented: $showingOverrideConfirmation) {
@@ -113,7 +131,8 @@ struct DayDetailView: View {
                         presentationMode.wrappedValue.dismiss()
                     }) {
                         Text("Create Interruption From This Day")
-                            .foregroundColor(.blue)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.primary)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }

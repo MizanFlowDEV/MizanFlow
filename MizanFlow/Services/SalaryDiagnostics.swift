@@ -29,8 +29,7 @@ class SalaryDiagnostics {
             totalDays: monthDays.count,
             workDays: [],
             offDays: [],
-            totalOvertimeHours: 0,
-            expectedOvertimeHours: 0
+            totalOvertimeHours: 0
         )
         
         let hitchCycle = 21
@@ -51,7 +50,6 @@ class SalaryDiagnostics {
                 adlHours: day.adlHours ?? 0,
                 isOverride: day.isOverride,
                 isInHitch: day.isInHitch,
-                expectedOvertime: calculateExpectedOvertime(dayInCycle: dayInCycle, isHoliday: day.isHoliday),
                 daysSinceHitchStart: daysSinceHitchStart
             )
             
@@ -61,22 +59,18 @@ class SalaryDiagnostics {
                 report.offDays.append(dayInfo)
             }
             
-            report.totalOvertimeHours += day.overtimeHours ?? 0
-            report.expectedOvertimeHours += dayInfo.expectedOvertime
+            // Only count overtime from actual work days, matching what the schedule view shows
+            // Trust the schedule's day.type - if it says vacation/off, don't count it
+            let isWorkDayType = (day.type == .workday || day.type == .eidHoliday || 
+                                day.type == .nationalDay || day.type == .foundingDay)
+            
+            if isWorkDayType {
+                // Count the actual overtime hours stored in the schedule
+                report.totalOvertimeHours += day.overtimeHours ?? 0
+            }
         }
         
         return report
-    }
-    
-    private func calculateExpectedOvertime(dayInCycle: Int, isHoliday: Bool) -> Double {
-        guard dayInCycle < 14 else { return 0 }
-        if isHoliday {
-            return 12
-        } else if dayInCycle == 6 || dayInCycle == 13 {
-            return 12
-        } else {
-            return 4
-        }
     }
 }
 
@@ -89,38 +83,27 @@ struct DiagnosticReport {
     var workDays: [DayInfo] = []
     var offDays: [DayInfo] = []
     var totalOvertimeHours: Double = 0
-    var expectedOvertimeHours: Double = 0
-    
-    var discrepancy: Double {
-        expectedOvertimeHours - totalOvertimeHours
-    }
     
     func printReport() {
-        print("=== SALARY DIAGNOSTIC REPORT ===")
+        AppLogger.engine.info("=== SALARY DIAGNOSTIC REPORT ===")
         if let error = error {
-            print("ERROR: \(error)")
+            AppLogger.engine.error("ERROR: \(error)")
             return
         }
         
-        print("Month: \(month?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")")
-        print("Hitch Start Date: \(hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "NOT SET")")
-        print("Schedule Start Date: \(scheduleStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")")
-        print("Total Days: \(totalDays)")
-        print("Work Days: \(workDays.count)")
-        print("Off Days: \(offDays.count)")
-        print("\n--- WORK DAYS ---")
+        AppLogger.engine.info("Month: \(month?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")")
+        AppLogger.engine.info("Hitch Start Date: \(hitchStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "NOT SET")")
+        AppLogger.engine.info("Schedule Start Date: \(scheduleStartDate?.formatted(date: .abbreviated, time: .omitted) ?? "Unknown")")
+        AppLogger.engine.info("Total Days: \(totalDays), Work Days: \(workDays.count), Off Days: \(offDays.count)")
+        
+        AppLogger.engine.debug("--- WORK DAYS ---")
         for day in workDays {
             let dateStr = day.date.formatted(date: .numeric, time: .omitted)
-            print("\(dateStr): dayInCycle=\(day.dayInCycle), OT=\(day.overtimeHours) (expected: \(day.expectedOvertime)), daysSinceHitch=\(day.daysSinceHitchStart)")
-            if day.overtimeHours != day.expectedOvertime {
-                print("  ⚠️ MISMATCH: Expected \(day.expectedOvertime) but got \(day.overtimeHours)")
-            }
+            AppLogger.engine.debug("\(dateStr): dayInCycle=\(day.dayInCycle), OT=\(day.overtimeHours), ADL=\(day.adlHours), daysSinceHitch=\(day.daysSinceHitchStart)")
         }
-        print("\n--- SUMMARY ---")
-        print("Total Overtime Hours: \(totalOvertimeHours)")
-        print("Expected Overtime Hours: \(expectedOvertimeHours)")
-        print("Discrepancy: \(discrepancy) hours")
-        print("================================")
+        
+        AppLogger.engine.info("--- SUMMARY --- Total Overtime Hours: \(totalOvertimeHours)")
+        AppLogger.engine.info("================================")
     }
 }
 
@@ -132,6 +115,5 @@ struct DayInfo {
     let adlHours: Double
     let isOverride: Bool
     let isInHitch: Bool
-    let expectedOvertime: Double
     let daysSinceHitchStart: Int
 }

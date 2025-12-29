@@ -85,100 +85,41 @@ struct InterruptionSheet: View {
                     // Use multiple fallbacks to ensure we get the right suggestion
                     let suggestionToApply: SuggestModeSuggestion
                     
-                    // #region agent log
-                    let logAccept = "{\"location\":\"InterruptionSheet.swift:78\",\"message\":\"Accept Exception clicked\",\"data\":{\"dialogW\":\(dialogSuggestion?.workDays ?? -1),\"dialogO\":\(dialogSuggestion?.offDays ?? -1),\"selectedW\":\(selectedAlternative?.workDays ?? -1),\"selectedO\":\(selectedAlternative?.offDays ?? -1),\"pendingW\":\(pendingSuggestion?.workDays ?? -1),\"pendingO\":\(pendingSuggestion?.offDays ?? -1)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1,H2,H4\"}\n"
-                    if let data = logAccept.data(using: .utf8) {
-                        if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                            if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                                fileHandle.seekToEndOfFile()
-                                fileHandle.write(data)
-                                fileHandle.closeFile()
-                            }
-                        } else {
-                            FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                        }
-                    }
-                    print("🔍 DEBUG: Accept Exception - dialogSuggestion=\(dialogSuggestion?.workDays ?? -1)W/\(dialogSuggestion?.offDays ?? -1)O, selectedAlt=\(selectedAlternative?.workDays ?? -1)W/\(selectedAlternative?.offDays ?? -1)O, pending=\(pendingSuggestion?.workDays ?? -1)W/\(pendingSuggestion?.offDays ?? -1)O")
-                    // #endregion
+                    AppLogger.ui.debug("Accept Exception clicked: dialogW=\(dialogSuggestion?.workDays ?? -1), dialogO=\(dialogSuggestion?.offDays ?? -1), selectedW=\(selectedAlternative?.workDays ?? -1), selectedO=\(selectedAlternative?.offDays ?? -1), pendingW=\(pendingSuggestion?.workDays ?? -1), pendingO=\(pendingSuggestion?.offDays ?? -1)")
                     
                     // PART A: Use dialogSuggestion (not pendingSuggestion) as the authoritative source
                     // FIX: Capture in local constant IMMEDIATELY to prevent state mutation issues
                     // FIX: Add fallback to selectedAlternative and pendingSuggestion if dialogSuggestion is nil
                     if let capturedSuggestion = dialogSuggestion {
                         suggestionToApply = capturedSuggestion
-                        print("🔍 DEBUG: Using dialogSuggestion: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
+                        AppLogger.ui.debug("Using dialogSuggestion: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
                     } else if let capturedSuggestion = selectedAlternative {
                         suggestionToApply = capturedSuggestion
-                        print("🔍 DEBUG: Fallback to selectedAlternative: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
+                        AppLogger.ui.debug("Fallback to selectedAlternative: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
                     } else if let capturedSuggestion = pendingSuggestion {
                         suggestionToApply = capturedSuggestion
-                        print("🔍 DEBUG: Fallback to pendingSuggestion: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
+                        AppLogger.ui.debug("Fallback to pendingSuggestion: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
                     } else {
-                        // #region agent log
-                        let logError = "{\"location\":\"InterruptionSheet.swift:80\",\"message\":\"ERROR: All suggestions are nil\",\"data\":{},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1,H4\"}\n"
-                        if let data = logError.data(using: .utf8) {
-                            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                                    fileHandle.seekToEndOfFile()
-                                    fileHandle.write(data)
-                                    fileHandle.closeFile()
-                                }
-                            } else {
-                                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                            }
-                        }
-                        print("🔍 DEBUG: ERROR - All suggestions are nil!")
-                        // #endregion
-                        print("⚠️ No suggestion available when Accept Exception clicked")
+                        AppLogger.ui.error("ERROR: All suggestions are nil when Accept Exception clicked")
+                        AppLogger.ui.warning("No suggestion available when Accept Exception clicked")
                         showingOperationalConstraintsDialog = false
                         return
                     }
                     
-                    // #region agent log
-                    let logCaptured = "{\"location\":\"InterruptionSheet.swift:85\",\"message\":\"suggestion captured\",\"data\":{\"suggestionW\":\(suggestionToApply.workDays),\"suggestionO\":\(suggestionToApply.offDays),\"score\":\(suggestionToApply.score)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H2\"}\n"
-                    if let data = logCaptured.data(using: .utf8) {
-                        if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                            if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                                fileHandle.seekToEndOfFile()
-                                fileHandle.write(data)
-                                fileHandle.closeFile()
-                            }
-                        } else {
-                            FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                        }
-                    }
-                    print("🔍 DEBUG: Captured suggestion: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
-                    // #endregion
+                    AppLogger.ui.debug("Suggestion captured: suggestionW=\(suggestionToApply.workDays), suggestionO=\(suggestionToApply.offDays), score=\(suggestionToApply.score)")
                     
-                    print("✅ Accept Exception - Applying binding alternative: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O, Score: \(Int(suggestionToApply.score))")
+                    AppLogger.ui.info("Accept Exception - Applying binding alternative: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O, Score: \(Int(suggestionToApply.score))")
                     showingOperationalConstraintsDialog = false
                     
                     // Clear both states AFTER capturing
                     dialogSuggestion = nil
                     pendingSuggestion = nil
                     
-                    // #region agent log
-                    let logBeforeApply = "{\"location\":\"InterruptionSheet.swift:91\",\"message\":\"About to call applySuggestion\",\"data\":{\"suggestionW\":\(suggestionToApply.workDays),\"suggestionO\":\(suggestionToApply.offDays)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H2\"}\n"
-                    if let data = logBeforeApply.data(using: .utf8) {
-                        if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                            if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                                fileHandle.seekToEndOfFile()
-                                fileHandle.write(data)
-                                fileHandle.closeFile()
-                            }
-                        } else {
-                            FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                        }
-                    }
-                    print("🔍 DEBUG: About to apply: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
-                    print("═══════════════════════════════════════════════════════")
-                    print("🎯 APPLYING SUGGESTION: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O (Score: \(Int(suggestionToApply.score)))")
-                    print("═══════════════════════════════════════════════════════")
-                    // #endregion
+                    AppLogger.ui.debug("About to call applySuggestion: suggestionW=\(suggestionToApply.workDays), suggestionO=\(suggestionToApply.offDays), score=\(suggestionToApply.score)")
                     
                     // Apply the captured suggestion - using the immutable local constant
                     applySuggestion(suggestionToApply)
-                    print("✅ applySuggestion call completed for: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
+                    AppLogger.ui.info("applySuggestion call completed for: \(suggestionToApply.workDays)W/\(suggestionToApply.offDays)O")
                 }
                 Button("Suggest Alternative") {
                     showingOperationalConstraintsDialog = false
@@ -264,7 +205,9 @@ struct InterruptionSheet: View {
     private var returnPreferencesSection: some View {
         Section(header: HStack {
             Image(systemName: "calendar.badge.clock")
+                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
             Text(NSLocalizedString("Return Preferences", comment: ""))
+                .font(DesignTokens.Typography.sectionTitle)
         }) {
             Button(action: {
                 // Add haptic feedback
@@ -274,19 +217,22 @@ struct InterruptionSheet: View {
             }) {
                 HStack {
                     Text(NSLocalizedString("Specify Preferred Return Day", comment: ""))
+                        .font(DesignTokens.Typography.body)
                     Spacer()
                     if let returnDay = preferredReturnDay {
                         Text(returnDay.localizedName)
-                            .foregroundColor(.secondary)
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.accentColor)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
+                        Image(systemName: "checkmark.circle")
+                            .foregroundColor(DesignTokens.Color.primary)
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     } else {
                         Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
+                            .font(.system(size: DesignTokens.Icon.small, weight: DesignTokens.Icon.weight))
                     }
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: DesignTokens.Calendar.minCellSize)
             }
             .accessibilityLabel(NSLocalizedString("Specify Preferred Return Day", comment: ""))
             .accessibilityHint(NSLocalizedString("Tap to select your preferred return day", comment: ""))
@@ -302,47 +248,57 @@ struct InterruptionSheet: View {
                     
                     HStack {
                         Text("Worked Days Before:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text("\(workDays) (current hitch)")
-                            .foregroundColor(.blue)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.primary)
                     }
                     
                     HStack {
                         Text("Earned Off Days:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text("\(earnedDays) (from current hitch)")
-                            .foregroundColor(.green)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.success)
                     }
                     
                     Divider()
                     
                     HStack {
                         Text("Total Interruption Days:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         let totalDays = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
                         Text("\(totalDays + 1)")
-                            .foregroundColor(.orange)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.warning)
                     }
                     
                     HStack {
                         Text("Vacation Days Used:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text("\(vacationDaysUsed)")
-                            .foregroundColor(.red)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.error)
                     }
                     
                     HStack {
                         Text("Current Balance:")
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text("\(viewModel.getVacationBalance())")
-                            .foregroundColor(.blue)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.primary)
                     }
                     
                     if viewModel.isManuallyAdjusted() {
                         Text("Note: Schedule has manual overrides. Automatic rescheduling is disabled.")
-                            .font(.footnote)
-                            .foregroundColor(.orange)
-                            .padding(.top, 4)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundColor(DesignTokens.Color.warning)
+                            .padding(.top, DesignTokens.Spacing.xs)
                     }
                     
                     // Show validation warnings (reuse earnedDays from above)
@@ -353,19 +309,19 @@ struct InterruptionSheet: View {
                     )
                     
                     if !validationWarnings.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                             Text("⚠️ Validation Warnings:")
-                                .font(.footnote)
+                                .font(DesignTokens.Typography.caption)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.orange)
+                                .foregroundColor(DesignTokens.Color.warning)
                             
                             ForEach(validationWarnings, id: \.self) { warning in
                                 Text("• \(warning)")
-                                    .font(.footnote)
-                                    .foregroundColor(.orange)
+                                    .font(DesignTokens.Typography.caption)
+                                    .foregroundColor(DesignTokens.Color.warning)
                             }
                         }
-                        .padding(.top, 4)
+                        .padding(.top, DesignTokens.Spacing.xs)
                     }
                 }
             }
@@ -377,8 +333,10 @@ struct InterruptionSheet: View {
             if preferredReturnDay != nil {
                 Section(header: HStack {
                     Image(systemName: "brain.head.profile")
-                        .foregroundColor(.blue)
+                        .foregroundColor(DesignTokens.Color.primary)
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     Text("Suggest Mode Analysis")
+                        .font(DesignTokens.Typography.sectionTitle)
                 }) {
                     Button(action: {
                         // Add haptic feedback
@@ -388,11 +346,13 @@ struct InterruptionSheet: View {
                     }) {
                         HStack {
                             Text("Analyze Schedule Adjustment")
+                                .font(DesignTokens.Typography.body)
                             Spacer()
-                            Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(.blue)
+                            Image(systemName: "arrow.right.circle")
+                                .foregroundColor(DesignTokens.Color.primary)
+                                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                         }
-                        .frame(minHeight: 44)
+                        .frame(minHeight: DesignTokens.Calendar.minCellSize)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
@@ -537,20 +497,7 @@ struct InterruptionSheet: View {
     private func alternativeRowView(alt: SuggestModeSuggestion, isSelected: Bool) -> some View {
         Button(action: {
             // #region agent log
-            let logEntry = "{\"location\":\"InterruptionSheet.swift:alternativeRowView\",\"message\":\"Alternative row clicked\",\"data\":{\"workDays\":\(alt.workDays),\"offDays\":\(alt.offDays),\"score\":\(alt.score),\"isRecommended\":\(alt.isRecommended)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1,H2\"}\n"
-            if let data = logEntry.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        fileHandle.seekToEndOfFile()
-                        fileHandle.write(data)
-                        fileHandle.closeFile()
-                    }
-                } else {
-                    FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                }
-            }
-            print("🔍 DEBUG: Alternative row clicked: \(alt.workDays)W/\(alt.offDays)O")
-            // #endregion
+            AppLogger.ui.debug("Alternative row clicked: workDays=\(alt.workDays), offDays=\(alt.offDays), score=\(alt.score), isRecommended=\(alt.isRecommended)")
             
             // Add haptic feedback
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
@@ -559,43 +506,15 @@ struct InterruptionSheet: View {
             // Track the selected alternative
             selectedAlternative = alt
             if alt.isRecommended {
-                print("✅ Direct apply (recommended): \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score))")
+                AppLogger.ui.info("Direct apply (recommended): \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score))")
                 applySuggestion(alt)
             } else {
-                // #region agent log
-                let logBefore = "{\"location\":\"InterruptionSheet.swift:alternativeRowView\",\"message\":\"BEFORE assignment\",\"data\":{\"workDays\":\(alt.workDays),\"offDays\":\(alt.offDays),\"currentDialogW\":\(dialogSuggestion?.workDays ?? -1),\"currentDialogO\":\(dialogSuggestion?.offDays ?? -1)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1,H4\"}\n"
-                if let data = logBefore.data(using: .utf8) {
-                    if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                            fileHandle.seekToEndOfFile()
-                            fileHandle.write(data)
-                            fileHandle.closeFile()
-                        }
-                    } else {
-                        FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                    }
-                }
-                print("🔍 DEBUG: BEFORE setting dialogSuggestion: alt=\(alt.workDays)W/\(alt.offDays)O, currentDialog=\(dialogSuggestion?.workDays ?? -1)W/\(dialogSuggestion?.offDays ?? -1)O")
-                // #endregion
+                AppLogger.ui.debug("BEFORE assignment: workDays=\(alt.workDays), offDays=\(alt.offDays), currentDialogW=\(dialogSuggestion?.workDays ?? -1), currentDialogO=\(dialogSuggestion?.offDays ?? -1)")
                 // PART A: Set BOTH dialogSuggestion and pendingSuggestion when user chooses alternative requiring approval
                 dialogSuggestion = alt
                 pendingSuggestion = alt
-                // #region agent log
-                let logAfter = "{\"location\":\"InterruptionSheet.swift:alternativeRowView\",\"message\":\"AFTER assignment\",\"data\":{\"workDays\":\(alt.workDays),\"offDays\":\(alt.offDays),\"dialogW\":\(dialogSuggestion?.workDays ?? -1),\"dialogO\":\(dialogSuggestion?.offDays ?? -1)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1,H4\"}\n"
-                if let data = logAfter.data(using: .utf8) {
-                    if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                        if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                            fileHandle.seekToEndOfFile()
-                            fileHandle.write(data)
-                            fileHandle.closeFile()
-                        }
-                    } else {
-                        FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-                    }
-                }
-                print("🔍 DEBUG: AFTER setting dialogSuggestion: alt=\(alt.workDays)W/\(alt.offDays)O, dialogSuggestion=\(dialogSuggestion?.workDays ?? -1)W/\(dialogSuggestion?.offDays ?? -1)O")
-                // #endregion
-                print("🎯 Selected Alternative: \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score)), Warnings: \(alt.validationWarnings.count + alt.futureSimulationWarnings.count)")
+                AppLogger.ui.debug("AFTER assignment: workDays=\(alt.workDays), offDays=\(alt.offDays), dialogW=\(dialogSuggestion?.workDays ?? -1), dialogO=\(dialogSuggestion?.offDays ?? -1)")
+                AppLogger.ui.info("Selected Alternative: \(alt.workDays)W/\(alt.offDays)O, Score: \(Int(alt.score)), Warnings: \(alt.validationWarnings.count + alt.futureSimulationWarnings.count)")
                 showOperationalAlerts(for: alt)
             }
         }) {
@@ -781,14 +700,14 @@ struct InterruptionSheet: View {
         // FIXED: Force validation check and log for debugging
         if let result = suggestModeResult {
             if !result.alerts.isEmpty {
-                print("⚠️ Operational alerts detected: \(result.alerts.count) alerts")
+                AppLogger.ui.warning("Operational alerts detected: \(result.alerts.count) alerts")
             }
             if let suggestion = result.suggestion {
                 if !suggestion.validationWarnings.isEmpty {
-                    print("⚠️ Validation warnings detected for suggestion: \(suggestion.validationWarnings.joined(separator: ", "))")
+                    AppLogger.ui.warning("Validation warnings detected for suggestion: \(suggestion.validationWarnings.joined(separator: ", "))")
                 }
                 if !suggestion.futureSimulationWarnings.isEmpty {
-                    print("⚠️ Future simulation warnings detected: \(suggestion.futureSimulationWarnings.joined(separator: ", "))")
+                    AppLogger.ui.warning("Future simulation warnings detected: \(suggestion.futureSimulationWarnings.joined(separator: ", "))")
                 }
             }
         }
@@ -797,13 +716,13 @@ struct InterruptionSheet: View {
     private func handleInterruptionWithSuggestMode() {
         // CRITICAL: Prevent running if a suggestion has already been applied
         if suggestionApplied {
-            print("🔍 DEBUG: handleInterruptionWithSuggestMode blocked - suggestion already applied")
+            AppLogger.ui.debug("handleInterruptionWithSuggestMode blocked - suggestion already applied")
             return
         }
         
         // CRITICAL: Prevent running if we're already applying a suggestion
         if isApplyingSuggestion {
-            print("🔍 DEBUG: handleInterruptionWithSuggestMode blocked - suggestion already being applied")
+            AppLogger.ui.debug("handleInterruptionWithSuggestMode blocked - suggestion already being applied")
             return
         }
         
@@ -815,7 +734,7 @@ struct InterruptionSheet: View {
         
         // PART B: PRIORITY 1: If user has selected an alternative, use it
         if let selected = selectedAlternative {
-            print("✅ Using user-selected alternative: \(selected.workDays)W/\(selected.offDays)O")
+            AppLogger.ui.info("Using user-selected alternative: \(selected.workDays)W/\(selected.offDays)O")
             applySuggestion(selected)
             return
         }
@@ -858,10 +777,7 @@ struct InterruptionSheet: View {
             // If we reach here, it means suggestModeResult exists but conditions weren't met
             // AND no suggestion has been applied. This is a logic error - we should not call
             // handleInterruptionWithEnhancedLogic() as it will overwrite any applied suggestion.
-            print("⚠️ WARNING: handleInterruptionWithSuggestMode reached fallback - this should not happen in suggest mode")
-            print("⚠️ suggestModeResult exists: \(suggestModeResult != nil)")
-            print("⚠️ suggestionApplied: \(suggestionApplied)")
-            print("⚠️ dialogSuggestion: \(dialogSuggestion?.workDays ?? -1)W/\(dialogSuggestion?.offDays ?? -1)O")
+            AppLogger.ui.warning("handleInterruptionWithSuggestMode reached fallback - this should not happen in suggest mode: suggestModeResult exists=\(suggestModeResult != nil), suggestionApplied=\(suggestionApplied), dialogSuggestion=\(dialogSuggestion?.workDays ?? -1)W/\(dialogSuggestion?.offDays ?? -1)O")
             // Do NOT call handleInterruptionWithEnhancedLogic() - it will overwrite the schedule
             // Instead, just dismiss the sheet if we're in this state
             presentationMode.wrappedValue.dismiss()
@@ -871,46 +787,19 @@ struct InterruptionSheet: View {
     private func applySuggestion(_ suggestion: SuggestModeSuggestion) {
         // CRITICAL GUARD: Prevent multiple simultaneous applications
         if isApplyingSuggestion {
-            print("⚠️ WARNING: applySuggestion called while already applying! Ignoring duplicate call.")
+            AppLogger.ui.warning("applySuggestion called while already applying! Ignoring duplicate call.")
             return
         }
         isApplyingSuggestion = true
         
-        // #region agent log
-        let logEntry = "{\"location\":\"InterruptionSheet.swift:655\",\"message\":\"applySuggestion ENTRY\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays),\"score\":\(suggestion.score)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H2,H5\"}\n"
-        if let data = logEntry.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-            }
-        }
-        print("═══════════════════════════════════════════════════════")
-        print("🔍 DEBUG: applySuggestion ENTRY with: \(suggestion.workDays)W/\(suggestion.offDays)O (Score: \(Int(suggestion.score)))")
-        print("═══════════════════════════════════════════════════════")
-        // #endregion
+        AppLogger.ui.debug("applySuggestion ENTRY: suggestionW=\(suggestion.workDays), suggestionO=\(suggestion.offDays), score=\(suggestion.score)")
         // PART 1: Debug log right before applying
-        print("APPLY SELECTED: \(suggestion.workDays)W/\(suggestion.offDays)O score=\(suggestion.score)")
+        AppLogger.ui.debug("APPLY SELECTED: \(suggestion.workDays)W/\(suggestion.offDays)O score=\(suggestion.score)")
         
         // PART E: Add definitive debug log to prove binding works
         let source = (dialogSuggestion?.workDays == suggestion.workDays && dialogSuggestion?.offDays == suggestion.offDays) ? "Dialog" : 
                      (selectedAlternative?.workDays == suggestion.workDays && selectedAlternative?.offDays == suggestion.offDays) ? "Alternative" : "Primary"
-        print("""
-        🎯 InterruptionSheet.applySuggestion called:
-           Source: \(source)
-           Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
-           Score: \(Int(suggestion.score))
-           Is Recommended: \(suggestion.isRecommended)
-           Validation Warnings: \(suggestion.validationWarnings.count)
-           Future Warnings: \(suggestion.futureSimulationWarnings.count)
-           Interruption: \(startDate) to \(endDate)
-           Preferred Return Day: \(preferredReturnDay?.description ?? "None")
-           Target Return Day: \(suggestion.targetReturnDay.description)
-        """)
+        AppLogger.ui.info("InterruptionSheet.applySuggestion called: Source=\(source), Pattern=\(suggestion.workDays)W/\(suggestion.offDays)O, Score=\(Int(suggestion.score)), Is Recommended=\(suggestion.isRecommended), Validation Warnings=\(suggestion.validationWarnings.count), Future Warnings=\(suggestion.futureSimulationWarnings.count), Interruption=\(startDate) to \(endDate), Preferred Return Day=\(preferredReturnDay?.description ?? "None"), Target Return Day=\(suggestion.targetReturnDay.description)")
         
         // CRITICAL VALIDATION: Verify the suggestion BEFORE clearing state
         // Log a warning if this doesn't match what we expect
@@ -919,11 +808,11 @@ struct InterruptionSheet: View {
         
         if let expected = expectedDialog, 
            expected.workDays != suggestion.workDays || expected.offDays != suggestion.offDays {
-            print("⚠️ WARNING: Suggestion mismatch with dialogSuggestion! Expected: \(expected.workDays)W/\(expected.offDays)O, Got: \(suggestion.workDays)W/\(suggestion.offDays)O")
+            AppLogger.ui.warning("Suggestion mismatch with dialogSuggestion! Expected: \(expected.workDays)W/\(expected.offDays)O, Got: \(suggestion.workDays)W/\(suggestion.offDays)O")
         }
         if let expected = expectedSelected,
            expected.workDays != suggestion.workDays || expected.offDays != suggestion.offDays {
-            print("⚠️ WARNING: Suggestion mismatch with selectedAlternative! Expected: \(expected.workDays)W/\(expected.offDays)O, Got: \(suggestion.workDays)W/\(suggestion.offDays)O")
+            AppLogger.ui.warning("Suggestion mismatch with selectedAlternative! Expected: \(expected.workDays)W/\(expected.offDays)O, Got: \(suggestion.workDays)W/\(suggestion.offDays)O")
         }
         
         // PART C: Clear all state - applySuggestion is authoritative, nothing should override it
@@ -944,29 +833,29 @@ struct InterruptionSheet: View {
                 FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
             }
         }
-        print("🔍 DEBUG: About to call viewModel with: \(suggestion.workDays)W/\(suggestion.offDays)O")
+        AppLogger.ui.debug("About to call viewModel with: \(suggestion.workDays)W/\(suggestion.offDays)O")
         // #endregion
         
         // PART 1: Use applySuggestModeSuggestion instead of applyInterruptWithExecutableAlternative
         // This ensures the baseline 14W/7O restart uses the same helper as the analyzer
-        print("🔍 DEBUG: FINAL - About to apply: \(suggestion.workDays)W/\(suggestion.offDays)O to ViewModel")
+        AppLogger.ui.debug("FINAL - About to apply: \(suggestion.workDays)W/\(suggestion.offDays)O to ViewModel")
         viewModel.applySuggestModeSuggestion(
             suggestion,
             interruptionStart: startDate,
             interruptionEnd: endDate,
             type: selectedType
         )
-        print("🔍 DEBUG: FINAL - ViewModel.applySuggestModeSuggestion completed")
+        AppLogger.ui.debug("FINAL - ViewModel.applySuggestModeSuggestion completed")
         
         // CRITICAL FIX: Mark suggestion as applied and clear suggestModeResult to prevent re-entry
         suggestionApplied = true
         suggestModeResult = nil
-        print("🔍 DEBUG: suggestionApplied flag set to true, suggestModeResult cleared")
+        AppLogger.ui.debug("suggestionApplied flag set to true, suggestModeResult cleared")
         
         // PART 1: Do NOT call any fallback handlers after applying suggestion
         // applySuggestion is authoritative - no markInterruptionDaysOnly or handleInterruptionWithEnhancedLogic
         
-        print("🔍 DEBUG: Dismissing sheet after applying: \(suggestion.workDays)W/\(suggestion.offDays)O")
+        AppLogger.ui.debug("Dismissing sheet after applying: \(suggestion.workDays)W/\(suggestion.offDays)O")
         presentationMode.wrappedValue.dismiss()
         
         // Reset the guard after a short delay to allow the dismissal to complete

@@ -423,7 +423,7 @@ class ScheduleEngine {
             let alignsWithTarget = (nextCycleStartDay == targetReturnDay)
             
             // PART 2: Debug log for each alternative
-            print("ALT \(cycle.workDays)W/\(cycle.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextCycleStartDay.description) aligns=\(alignsWithTarget)")
+            AppLogger.engine.debug("ALT \(cycle.workDays)W/\(cycle.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextCycleStartDay.description) aligns=\(alignsWithTarget)")
             
             // Validate this alternative
             let validationWarnings = validateSuggestion(
@@ -1006,8 +1006,8 @@ class ScheduleEngine {
 
             // Check for public holiday, but preserve the 14-day work cycle
             let isHoliday = holidayService.isPublicHoliday(currentDate)
-            if isHoliday && dayInCycle >= 14 {
-                // holiday during the 7-day break
+            if isHoliday {
+                // Set holiday type for both workdays and off days
                 if let holidayType = holidayService.getHolidayType(currentDate) {
                     type = convertHolidayTypeToDayType(holidayType)
                 }
@@ -1131,7 +1131,7 @@ class ScheduleEngine {
                 // Validate plan before applying
                 if let validationError = validateReschedulePlan(flexiblePlan) {
                     // Log warning - in production, this should be shown to user
-                    print("⚠️ Warning: \(validationError)")
+                    AppLogger.engine.warning("\(validationError)")
                 }
                 // Apply flexible reschedule plan
                 applyFlexibleReschedulePlan(flexiblePlan, to: &schedule, startingFrom: returnDate)
@@ -1148,7 +1148,7 @@ class ScheduleEngine {
                     // Validate plan before applying
                     if let validationError = validateReschedulePlan(legacyPlan) {
                         // Log warning - in production, this should be shown to user
-                        print("⚠️ Warning: \(validationError)")
+                        AppLogger.engine.warning("\(validationError)")
                     }
                     applyReschedulePlan(legacyPlan, to: &schedule)
                 } else {
@@ -1173,7 +1173,7 @@ class ScheduleEngine {
         
         // PART D: Remove force unwrap crash risk - use safe guard instead
         guard let interruptionTypeRaw = schedule.interruptionType else {
-            print("⚠️ interruptionType nil in applyEarnedOffDaysToInterruption; defaulting to vacation")
+            AppLogger.engine.warning("interruptionType nil in applyEarnedOffDaysToInterruption; defaulting to vacation")
             let interruptionType = convertInterruptionTypeToDayType(.vacation)
             // Continue with default type - mark all days in interruption period
             for i in 0..<schedule.days.count {
@@ -1338,6 +1338,11 @@ class ScheduleEngine {
                 schedule.days[i].type = interruptionDayType
                 schedule.days[i].notes = "Interruption day"
                 schedule.days[i].isOverride = false
+                // CRITICAL: Set overtime and ADL to 0 for interruption days
+                // This ensures salary calculation matches what schedule view shows
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
             }
             
             if normalizedDayDate > normalizedEnd {
@@ -1375,7 +1380,7 @@ class ScheduleEngine {
         // Starting the day after interruption ends
         let resumeDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
         guard let resumeIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: resumeDate) }) else {
-            print("⚠️ Could not find resume date in schedule")
+            AppLogger.engine.warning("Could not find resume date in schedule")
             return
         }
         
@@ -1414,14 +1419,7 @@ class ScheduleEngine {
         dateFormatter.dateStyle = .short
         dateFormatter.timeStyle = .none
         
-        print("""
-        ✅ Binding Alternative Applied:
-           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
-           Earned Off Used: \(earnedUsed) of \(earnedDays) available
-           Vacation Used: \(max(0, totalInterruptionDays - earnedUsed))
-           Alternative Block: \(alternativeWorkDays)W/\(alternativeOffDays)O starting \(dateFormatter.string(from: resumeDate))
-           Baseline 14W/7O resumes from index \(baselineAnchor)
-        """)
+        AppLogger.engine.info("Binding Alternative Applied: Interruption=\(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd)), Earned Off Used=\(earnedUsed) of \(earnedDays) available, Vacation Used=\(max(0, totalInterruptionDays - earnedUsed)), Alternative Block=\(alternativeWorkDays)W/\(alternativeOffDays)O starting \(dateFormatter.string(from: resumeDate)), Baseline 14W/7O resumes from index \(baselineAnchor)")
     }
     
     // MARK: - Suggest Mode Application
@@ -1438,21 +1436,7 @@ class ScheduleEngine {
         interruptionEnd: Date,
         interruptionType: WorkSchedule.InterruptionType
     ) {
-        // #region agent log
-        let logEntry = "{\"location\":\"ScheduleEngine.swift:1393\",\"message\":\"applySuggestModeSuggestion ENTRY\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays),\"score\":\(suggestion.score)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H3\"}\n"
-        if let data = logEntry.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-            }
-        }
-        print("🔍 DEBUG: ScheduleEngine.applySuggestModeSuggestion called with: \(suggestion.workDays)W/\(suggestion.offDays)O")
-        // #endregion
+        AppLogger.engine.debug("applySuggestModeSuggestion ENTRY: suggestionW=\(suggestion.workDays), suggestionO=\(suggestion.offDays), score=\(suggestion.score)")
         let calendar = Calendar.current
         let normalizedStart = normalizeToStartOfDay(interruptionStart)
         let normalizedEnd = normalizeToStartOfDay(interruptionEnd)
@@ -1482,6 +1466,11 @@ class ScheduleEngine {
                 schedule.days[i].type = interruptionDayType
                 schedule.days[i].notes = "Interruption day"
                 schedule.days[i].isOverride = false
+                // CRITICAL: Set overtime and ADL to 0 for interruption days
+                // This ensures salary calculation matches what schedule view shows
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
             }
             
             if normalizedDayDate > normalizedEnd {
@@ -1518,7 +1507,7 @@ class ScheduleEngine {
         // C2: Apply the chosen suggestion cycle immediately after interruption
         let resumeDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? interruptionEnd
         guard let resumeIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: resumeDate) }) else {
-            print("⚠️ Could not find resume date in schedule")
+            AppLogger.engine.warning("Could not find resume date in schedule")
             return
         }
         
@@ -1537,7 +1526,7 @@ class ScheduleEngine {
                 FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
             }
         }
-        print("🔍 DEBUG: ScheduleEngine applying: \(suggestion.workDays)W/\(suggestion.offDays)O starting at index \(resumeIndex)")
+        AppLogger.engine.debug("ScheduleEngine applying: \(suggestion.workDays)W/\(suggestion.offDays)O starting at index \(resumeIndex)")
         // #endregion
         // Apply work days from suggestion
         for _ in 0..<suggestion.workDays {
@@ -1574,18 +1563,18 @@ class ScheduleEngine {
         let nextStandardDay = WorkSchedule.Weekday(rawValue: nextStandardWeekday) ?? .monday
         
         guard let nextStandardIndex = schedule.days.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: nextStandardStart) }) else {
-            print("⚠️ Could not find next standard start date in schedule, using currentIndex")
+            AppLogger.engine.warning("Could not find next standard start date in schedule, using currentIndex")
             // Fallback to currentIndex if date not found
             if currentIndex < schedule.days.count {
                 applyStandard14_7Pattern(&schedule, startingFrom: currentIndex)
             }
             // PART 2: Debug log even in fallback case
-            print("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description) (FALLBACK to index \(currentIndex))")
+            AppLogger.engine.debug("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description) (FALLBACK to index \(currentIndex))")
             return
         }
         
         // PART 2: Debug log
-        print("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description)")
+        AppLogger.engine.debug("APPLY \(suggestion.workDays)W/\(suggestion.offDays)O -> next14/7Start=\(nextStandardStart) weekday=\(nextStandardDay.description)")
         
         // PART 2: Resume standard 14W/7O from the exact nextStandardStart date (not currentIndex)
         if nextStandardIndex < schedule.days.count {
@@ -1601,17 +1590,7 @@ class ScheduleEngine {
         let earnedOffUsed = earnedDays - remainingEarnedDays
         let vacationUsed = max(0, totalInterruptionDays - earnedOffUsed)
         
-        print("""
-        ✅ ScheduleEngine.applySuggestModeSuggestion VERIFIED:
-           Selected Pattern: \(suggestion.workDays)W/\(suggestion.offDays)O
-           Applied Work Days: \(suggestion.workDays) (starting index \(resumeIndex))
-           Applied Off Days: \(suggestion.offDays)
-           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
-           Earned Off Used: \(earnedOffUsed) of \(earnedDays) available
-           Vacation Used: \(vacationUsed)
-           Next Standard Start: \(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description))
-           Baseline 14W/7O resumes from index \(nextStandardIndex)
-        """)
+        AppLogger.engine.info("ScheduleEngine.applySuggestModeSuggestion VERIFIED: Selected Pattern=\(suggestion.workDays)W/\(suggestion.offDays)O, Applied Work Days=\(suggestion.workDays) (starting index \(resumeIndex)), Applied Off Days=\(suggestion.offDays), Interruption=\(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd)), Earned Off Used=\(earnedOffUsed) of \(earnedDays) available, Vacation Used=\(vacationUsed), Next Standard Start=\(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description)), Baseline 14W/7O resumes from index \(nextStandardIndex)")
         
         // Verify the applied segment matches the suggestion
         var appliedWorkDays = 0
@@ -1624,22 +1603,11 @@ class ScheduleEngine {
             }
         }
         
-        print("""
-        ✅ Suggest Mode Applied:
-           Selected: \(suggestion.workDays)W/\(suggestion.offDays)O
-           Interruption: \(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd))
-           Earned Off Used: \(earnedOffUsed)
-           Vacation Used: \(vacationUsed)
-           Applied Segment Start: \(dateFormatter.string(from: resumeDate))
-           Applied Segment: \(suggestion.workDays) work, \(suggestion.offDays) off
-           Verified Applied: \(appliedWorkDays) work, \(appliedOffDays) off ✅
-           Next Standard Start: \(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description))
-           Standard 14W/7O resumes from index \(nextStandardIndex)
-        """)
+        AppLogger.engine.info("Suggest Mode Applied: Selected=\(suggestion.workDays)W/\(suggestion.offDays)O, Interruption=\(dateFormatter.string(from: interruptionStart)) to \(dateFormatter.string(from: interruptionEnd)), Earned Off Used=\(earnedOffUsed), Vacation Used=\(vacationUsed), Applied Segment Start=\(dateFormatter.string(from: resumeDate)), Applied Segment=\(suggestion.workDays) work/\(suggestion.offDays) off, Verified Applied=\(appliedWorkDays) work/\(appliedOffDays) off, Next Standard Start=\(dateFormatter.string(from: nextStandardStart)) (weekday: \(nextStandardDay.description)), Standard 14W/7O resumes from index \(nextStandardIndex)")
         
         // Verify the pattern matches
         if appliedWorkDays != suggestion.workDays || appliedOffDays != suggestion.offDays {
-            print("⚠️ WARNING: Applied pattern (\(appliedWorkDays)W/\(appliedOffDays)O) does not match selected (\(suggestion.workDays)W/\(suggestion.offDays)O)")
+            AppLogger.engine.warning("Applied pattern (\(appliedWorkDays)W/\(appliedOffDays)O) does not match selected (\(suggestion.workDays)W/\(suggestion.offDays)O)")
         }
     }
     
@@ -2003,7 +1971,7 @@ class ScheduleEngine {
         // Validate plan before applying
         if let validationError = validateReschedulePlan(plan) {
             // Log warning - in production, this should be shown to user
-            print("⚠️ Warning: \(validationError)")
+            AppLogger.engine.warning("\(validationError)")
         }
         
         let calendar = Calendar.current
@@ -2066,7 +2034,7 @@ class ScheduleEngine {
         // Validate plan before applying
         if let validationError = validateReschedulePlan(plan) {
             // Log warning - in production, this should be shown to user
-            print("⚠️ Warning: \(validationError)")
+            AppLogger.engine.warning("\(validationError)")
         }
         
         let calendar = Calendar.current
@@ -2500,10 +2468,14 @@ class ScheduleEngine {
                     let is7thOr14thWorkday = (dayInCycle == 6 || dayInCycle == 13)
                     
                     if is7thOr14thWorkday {
-                        schedule.days[i].overtimeHours = 8.0
-                        schedule.days[i].notes = "Holiday on 7th/14th workday - 8hrs straight time"
-                    } else if dayInCycle < 14 {
+                        // Special pay rule: 8 hours straight time (ADL) + 12 hours overtime
+                        schedule.days[i].adlHours = 8.0
                         schedule.days[i].overtimeHours = 12.0
+                        schedule.days[i].notes = "Holiday on 7th/14th workday - 8hrs straight time + 12hrs overtime"
+                    } else if dayInCycle < 14 {
+                        // Regular holiday during work period: 12 hours overtime
+                        schedule.days[i].overtimeHours = 12.0
+                        schedule.days[i].adlHours = 0.0
                         schedule.days[i].notes = "Holiday during workday - 12hrs overtime"
                     }
                 }
@@ -2538,43 +2510,137 @@ class ScheduleEngine {
         
         AppLogger.engine.info("Recalculating overtime hours. Hitch start: \(hitchStartDate.formatted(date: .abbreviated, time: .omitted))")
         
+        // CRITICAL FIX: After an interruption with rescheduling, the work cycle restarts
+        // Calculate the effective start date for dayInCycle calculation
+        let effectiveStartDate: Date
+        if let interruptionEnd = schedule.interruptionEnd,
+           schedule.isInterrupted {
+            // After interruption, work cycle restarts from the day after interruption ends
+            effectiveStartDate = calendar.date(byAdding: .day, value: 1, to: interruptionEnd) ?? normalizedHitchStart
+        } else {
+            // No interruption, use original hitch start
+            effectiveStartDate = normalizedHitchStart
+        }
+        let normalizedEffectiveStart = normalizeToStartOfDay(effectiveStartDate)
+        
         for i in 0..<schedule.days.count {
             let day = schedule.days[i]
             let normalizedDayDate = normalizeToStartOfDay(day.date)
             
-            // Calculate dayInCycle based on hitch start date
-            let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDayDate).day ?? 0
-            let dayInCycle = (daysSinceHitchStart % hitchCycle + hitchCycle) % hitchCycle // Ensure positive
-            
-            // CRITICAL FIX: Determine what the day type SHOULD be based on dayInCycle
-            let expectedType = determineDayTypeInHitchPattern(dayInCycle)
-            
-            // Check if day type needs correction (unless it's a holiday or override)
-            let isHolidayType = (day.type == .eidHoliday || day.type == .nationalDay || day.type == .foundingDay)
-            
-            if !day.isOverride && !isHolidayType && day.type != expectedType {
-                // Day type is wrong - correct it FIRST before calculating overtime
-                schedule.days[i].type = expectedType
-                AppLogger.engine.info("Corrected day type for \(day.date.formatted(date: .numeric, time: .omitted)): was \(day.type.rawValue), now \(expectedType.rawValue), dayInCycle=\(dayInCycle)")
+            // CRITICAL FIX: For days after interruption, calculate dayInCycle from the resume date
+            // For days before/during interruption, use original hitch start
+            let dayInCycle: Int
+            if let interruptionEnd = schedule.interruptionEnd,
+               schedule.isInterrupted,
+               normalizedDayDate > normalizeToStartOfDay(interruptionEnd) {
+                // This day is after interruption - calculate from resume date
+                let daysSinceResume = calendar.dateComponents([.day], from: normalizedEffectiveStart, to: normalizedDayDate).day ?? 0
+                dayInCycle = (daysSinceResume % hitchCycle + hitchCycle) % hitchCycle // Ensure positive
+            } else {
+                // This day is before or during interruption - use original hitch start
+                let daysSinceHitchStart = calendar.dateComponents([.day], from: normalizedHitchStart, to: normalizedDayDate).day ?? 0
+                dayInCycle = (daysSinceHitchStart % hitchCycle + hitchCycle) % hitchCycle // Ensure positive
             }
             
-            // Recalculate overtime based on dayInCycle, regardless of current day.type
-            if dayInCycle < 14 && !day.isOverride {
+            // CRITICAL FIX: Check if this day is within an active interruption period
+            // If so, preserve the interruption day type (vacation/training) and don't recalculate
+            let isInInterruptionPeriod: Bool
+            if let interruptionStart = schedule.interruptionStart,
+               let interruptionEnd = schedule.interruptionEnd {
+                let normalizedInterruptionStart = normalizeToStartOfDay(interruptionStart)
+                let normalizedInterruptionEnd = normalizeToStartOfDay(interruptionEnd)
+                isInInterruptionPeriod = normalizedDayDate >= normalizedInterruptionStart && normalizedDayDate <= normalizedInterruptionEnd
+            } else {
+                isInInterruptionPeriod = false
+            }
+            
+            // CRITICAL FIX: Preserve earned off days, vacation, training, and company off days
+            // These should NEVER be changed to workdays, regardless of dayInCycle
+            let isInterruptionDayType = (day.type == .vacation || day.type == .training || 
+                                        day.type == .companyOff || day.type == .earnedOffDay)
+            
+            // If day is in interruption period and is marked as vacation/training, preserve it
+            if isInInterruptionPeriod && (day.type == .vacation || day.type == .training || day.type == .companyOff) && !day.isOverride {
+                // This is an interruption day - keep it as is and set overtime to 0
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
+                continue // Skip the rest of the recalculation for this day
+            }
+            
+            // CRITICAL FIX: Preserve earned off days - they should never be changed to workdays
+            // Earned off days are used before interruptions and should always have 0 OT
+            if day.type == .earnedOffDay && !day.isOverride {
+                // This is an earned off day - keep it as is and set overtime to 0
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
+                continue // Skip the rest of the recalculation for this day
+            }
+            
+            // CRITICAL FIX: Check if this is a holiday first
+            let isPublicHoliday = holidayService.isPublicHoliday(day.date)
+            var expectedType: DayType
+            
+            if isPublicHoliday, let holidayType = holidayService.getHolidayType(day.date) {
+                // This is a holiday - use holiday type
+                expectedType = convertHolidayTypeToDayType(holidayType)
+                // Update day type if it's not already a holiday type
+                if day.type != expectedType && !day.isOverride {
+                    schedule.days[i].type = expectedType
+                    AppLogger.engine.info("Set holiday type for \(day.date.formatted(date: .numeric, time: .omitted)): \(expectedType.rawValue), dayInCycle=\(dayInCycle)")
+                }
+            } else {
+                // Not a holiday - determine type based on hitch pattern
+                expectedType = determineDayTypeInHitchPattern(dayInCycle)
+                
+                // Check if day type needs correction (unless it's a holiday, override, or interruption day)
+                let isHolidayType = (day.type == .eidHoliday || day.type == .nationalDay || day.type == .foundingDay)
+                
+                if !day.isOverride && !isHolidayType && !isInterruptionDayType && day.type != expectedType {
+                    // Day type is wrong - correct it FIRST before calculating overtime
+                    schedule.days[i].type = expectedType
+                    AppLogger.engine.info("Corrected day type for \(day.date.formatted(date: .numeric, time: .omitted)): was \(day.type.rawValue), now \(expectedType.rawValue), dayInCycle=\(dayInCycle)")
+                }
+            }
+            
+            // CRITICAL FIX: Vacation, training, and other interruption days should have 0 overtime
+            // regardless of their position in the hitch cycle
+            let isInterruptionDay = (day.type == .vacation || day.type == .training || 
+                                     day.type == .companyOff || day.type == .earnedOffDay)
+            
+            AppLogger.engine.debug("Before recalculation: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle), currentOT=\(day.overtimeHours ?? -1), currentADL=\(day.adlHours ?? -1), isInterruptionDay=\(isInterruptionDay), isOverride=\(day.isOverride), expectedType=\(expectedType.rawValue)")
+            
+            if isInterruptionDay && !day.isOverride {
+                // Interruption days (vacation, training, etc.) have no overtime
+                schedule.days[i].overtimeHours = 0
+                schedule.days[i].adlHours = 0
+                schedule.days[i].isInHitch = false
+                
+                AppLogger.engine.debug("Set interruption day to 0: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle)")
+            } else if dayInCycle < 14 && !day.isOverride {
                 // This is a workday in the cycle - calculate overtime
-                let isHoliday = holidayService.isPublicHoliday(day.date)
-                let overtime = computeOvertime(for: expectedType, dayInCycle: dayInCycle, isHoliday: isHoliday)
-                let adl = computeAdl(for: expectedType, dayInCycle: dayInCycle, isHoliday: isHoliday)
+                // Use the isPublicHoliday check we already did above
+                let overtime = computeOvertime(for: expectedType, dayInCycle: dayInCycle, isHoliday: isPublicHoliday)
+                let adl = computeAdl(for: expectedType, dayInCycle: dayInCycle, isHoliday: isPublicHoliday)
                 
                 schedule.days[i].overtimeHours = overtime
                 schedule.days[i].adlHours = adl
                 schedule.days[i].isInHitch = true
+                
+                AppLogger.engine.debug("Set workday overtime: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle), overtime=\(overtime), adl=\(adl), isHoliday=\(isPublicHoliday), expectedType=\(expectedType.rawValue)")
             } else if dayInCycle >= 14 && !day.isOverride {
                 // This is an off day in the cycle - zero overtime
                 schedule.days[i].overtimeHours = 0
                 schedule.days[i].adlHours = 0
                 schedule.days[i].isInHitch = false
+                
+                AppLogger.engine.debug("Set off day to 0: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle)")
             }
         }
+        
+        // Apply holiday pay rules after recalculation to ensure correct holiday pay
+        handleHolidayPayRules(&schedule)
         
         AppLogger.engine.info("Overtime recalculation complete")
     }
@@ -2582,6 +2648,7 @@ class ScheduleEngine {
     // MARK: - Holiday Pay Handling
     
     func handleHolidayPayRules(_ schedule: inout WorkSchedule) {
+        AppLogger.engine.debug("Applying holiday pay rules to schedule")
         for i in 0..<schedule.days.count {
             let day = schedule.days[i]
             let dayInCycle = getCurrentHitchDay(schedule, for: day.date)
@@ -2590,42 +2657,70 @@ class ScheduleEngine {
             let isHoliday = (day.type == .eidHoliday || day.type == .nationalDay || day.type == .foundingDay)
             
             if isHoliday {
+                let beforeOT = day.overtimeHours ?? 0
+                let beforeADL = day.adlHours ?? 0
+                
                 // Is it the 7th or 14th day of work?
                 let is7thOr14thWorkday = (dayInCycle == 6 || dayInCycle == 13)
                 
                 if is7thOr14thWorkday {
-                    // Special pay rule: 8 hours straight time only
-                    schedule.days[i].overtimeHours = 8.0
-                    schedule.days[i].notes = "Holiday on 7th/14th workday - 8hrs straight time"
+                    // Special pay rule: 8 hours straight time (ADL) + 12 hours overtime
+                    schedule.days[i].adlHours = 8.0
+                    schedule.days[i].overtimeHours = 12.0
+                    schedule.days[i].notes = "Holiday on 7th/14th workday - 8hrs straight time + 12hrs overtime"
+                    
+                    AppLogger.engine.debug("Holiday on 7th/14th workday: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle), beforeOT=\(beforeOT), beforeADL=\(beforeADL), afterOT=12.0, afterADL=8.0")
                 } else if dayInCycle < 14 {
                     // Regular holiday during work period: 12 hours overtime
                     schedule.days[i].overtimeHours = 12.0
+                    schedule.days[i].adlHours = 0.0
                     schedule.days[i].notes = "Holiday during workday - 12hrs overtime"
+                    
+                    AppLogger.engine.debug("Regular holiday during workday: date=\(day.date.formatted(date: .numeric, time: .omitted)), type=\(day.type.rawValue), dayInCycle=\(dayInCycle), beforeOT=\(beforeOT), beforeADL=\(beforeADL), afterOT=12.0, afterADL=0.0")
                 }
                 // Note: Holidays during off days have no special pay - no change needed
             }
         }
+        AppLogger.engine.debug("Holiday pay rules applied")
     }
 }
 
     private func computeOvertime(for type: DayType, dayInCycle: Int, isHoliday: Bool) -> Double {
         guard dayInCycle < 14 else { return 0 }
+        let result: Double
         if isHoliday {
-            return 12
+            result = 12
         } else if dayInCycle == 6 || dayInCycle == 13 {
-            return 12
+            result = 12
         } else {
-            return 4
+            result = 4
         }
+        
+        AppLogger.engine.debug("Computed overtime: type=\(type.rawValue), dayInCycle=\(dayInCycle), isHoliday=\(isHoliday), result=\(result)")
+        
+        return result
     }
 
     private func computeAdl(for type: DayType, dayInCycle: Int, isHoliday: Bool) -> Double {
         guard dayInCycle < 14 else { return 0 }
-        // 3-hour allowance on first and last hitch day
-        if dayInCycle == 0 || dayInCycle == 13 {
-            return 3
-        } else {
-            return 0
+        
+        // Special rule: Holidays on 7th or 14th workday get 8 hours ADL
+        if isHoliday && (dayInCycle == 6 || dayInCycle == 13) {
+            let result = 8.0
+            AppLogger.engine.debug("Computed ADL: type=\(type.rawValue), dayInCycle=\(dayInCycle), isHoliday=\(isHoliday), result=\(result) [Holiday on 7th/14th workday]")
+            return result
         }
+        
+        // 3-hour allowance on first and last hitch day (non-holiday)
+        let result: Double
+        if dayInCycle == 0 || dayInCycle == 13 {
+            result = 3
+        } else {
+            result = 0
+        }
+        
+        AppLogger.engine.debug("Computed ADL: type=\(type.rawValue), dayInCycle=\(dayInCycle), isHoliday=\(isHoliday), result=\(result)")
+        
+        return result
     }
 

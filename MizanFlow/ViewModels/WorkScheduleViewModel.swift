@@ -124,7 +124,44 @@ class WorkScheduleViewModel: ObservableObject {
         
         // Apply the interruption
         scheduleEngine.handleInterruption(&schedule, startDate: startDate, endDate: endDate, type: type, preferredReturnDay: preferredReturnDay)
+        
+        // CRITICAL: Recalculate overtime hours to ensure interruption days have 0 overtime
+        // This ensures the salary calculation matches what the schedule view shows
+        if schedule.hitchStartDate != nil {
+            scheduleEngine.recalculateOvertimeHours(&schedule)
+        }
+        
+        // #region agent log
+        let logBeforeSave = "{\"location\":\"WorkScheduleViewModel.swift:handleInterruption\",\"message\":\"About to save schedule after interruption\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\",\"isInterrupted\":\(schedule.isInterrupted),\"interruptionStart\":\"\(schedule.interruptionStart?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"interruptionEnd\":\"\(schedule.interruptionEnd?.formatted(date: .abbreviated, time: .omitted) ?? "nil")\",\"totalDays\":\(schedule.days.count)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B,E\"}\n"
+        if let data = logBeforeSave.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
+        
         saveSchedule()
+        
+        // #region agent log
+        let logAfterSave = "{\"location\":\"WorkScheduleViewModel.swift:handleInterruption\",\"message\":\"Schedule saved after interruption\",\"data\":{\"scheduleId\":\"\(schedule.id.uuidString)\"},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B,E\"}\n"
+        if let data = logAfterSave.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
+            }
+        }
+        // #endregion
         
         HapticFeedback.saveSuccess()
         
@@ -315,7 +352,9 @@ class WorkScheduleViewModel: ObservableObject {
         let days = calendar.dateComponents([.day], from: hitchStart, to: date).day ?? 0
         
         // Return position in the 21-day cycle (14 work, 7 off)
-        return days % 21
+        // Use positive modulo to ensure non-negative result
+        let cyclePosition = (days % 21 + 21) % 21
+        return cyclePosition
     }
     
     // MARK: - Helper for Smart Reschedule
@@ -583,21 +622,7 @@ class WorkScheduleViewModel: ObservableObject {
            Type: \(type.rawValue, privacy: .public)
         """)
         
-        // #region agent log
-        let logEngine = "{\"location\":\"WorkScheduleViewModel.swift:515\",\"message\":\"About to call scheduleEngine.applySuggestModeSuggestion\",\"data\":{\"suggestionW\":\(suggestion.workDays),\"suggestionO\":\(suggestion.offDays)},\"timestamp\":\(Int(Date().timeIntervalSince1970*1000)),\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H3\"}\n"
-        if let data = logEngine.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                if let fileHandle = FileHandle(forWritingAtPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log") {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
-            } else {
-                FileManager.default.createFile(atPath: "/Users/busaad/AppDev/MizanFlow/.cursor/debug.log", contents: data, attributes: nil)
-            }
-        }
-        print("🔍 DEBUG: ViewModel calling scheduleEngine with: \(suggestion.workDays)W/\(suggestion.offDays)O")
-        // #endregion
+        AppLogger.viewModel.debug("About to call scheduleEngine.applySuggestModeSuggestion: suggestionW=\(suggestion.workDays), suggestionO=\(suggestion.offDays)")
         scheduleEngine.applySuggestModeSuggestion(
             &schedule,
             suggestion: suggestion,

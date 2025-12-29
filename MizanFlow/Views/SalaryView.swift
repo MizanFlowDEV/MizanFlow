@@ -16,10 +16,10 @@ struct SalaryView: View {
         case baseSalary
     }
     
-    // MARK: - Constants (Apple Design Guidelines)
-    private let minimumHitTarget: CGFloat = 44
-    private let sectionSpacing: CGFloat = 16
-    private let horizontalPadding: CGFloat = 16
+    // MARK: - Constants (Design Tokens)
+    private let minimumHitTarget: CGFloat = DesignTokens.Calendar.minCellSize
+    private let sectionSpacing: CGFloat = DesignTokens.Spacing.md
+    private let horizontalPadding: CGFloat = DesignTokens.Spacing.md
     
     // MARK: - Helper Functions
     
@@ -47,6 +47,11 @@ struct SalaryView: View {
                     
                     // Overtime Section
                     overtimeSection
+                    
+                    // Work Schedule Summary Section
+                    if let summary = viewModel.workScheduleSummary {
+                        workScheduleSummarySection(summary: summary)
+                    }
                     
                     // Deductions Section
                     deductionsSection
@@ -99,24 +104,28 @@ struct SalaryView: View {
             .sheet(isPresented: $viewModel.showingAddDeductionSheet) {
                 AddDeductionSheet(viewModel: viewModel)
             }
+            .onAppear {
+                AppLogger.ui.debug("SalaryView appeared - reloading schedule: selectedMonth=\(viewModel.selectedMonth.formatted(date: .abbreviated, time: .omitted))")
+                viewModel.reloadSchedule()
+            }
         }
     }
     
     // MARK: - Section Views
     
     private var baseSalarySection: some View {
-        SectionCard(title: "Base Salary", icon: "dollarsign.circle.fill", iconColor: .green) {
+        SectionCard(title: "Base Salary", icon: "dollarsign.circle", iconColor: DesignTokens.Color.success) {
             HStack {
                 Text("Monthly Base")
-                    .font(.body)
-                    .foregroundColor(.primary)
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.Color.textPrimary)
                 Spacer()
                 TextField("Enter base salary", value: $viewModel.salaryBreakdown.baseSalary, format: .currency(code: "SAR"))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
                     .focused($focusedField, equals: .baseSalary)
-                    .font(.body)
-                    .foregroundColor(.primary)
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.Color.textPrimary)
             }
             .frame(minHeight: minimumHitTarget)
             .accessibilityLabel("Monthly Base Salary")
@@ -125,7 +134,7 @@ struct SalaryView: View {
     }
     
     private var monthSelectorSection: some View {
-        SectionCard(title: "Month", icon: "calendar", iconColor: .blue) {
+        SectionCard(title: "Month", icon: "calendar", iconColor: DesignTokens.Color.primary) {
             Button(action: {
                 HapticFeedback.selection()
                 tempMonth = viewModel.selectedMonth
@@ -133,15 +142,15 @@ struct SalaryView: View {
             }) {
                 HStack {
                     Text("Select Month")
-                        .font(.body)
-                        .foregroundColor(.primary)
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     Spacer()
                     Text(viewModel.formatMonth(viewModel.selectedMonth))
-                        .font(.body)
-                        .foregroundColor(.secondary)
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textSecondary)
                     Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: DesignTokens.Icon.small, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.textSecondary)
                 }
                 .frame(minHeight: minimumHitTarget)
             }
@@ -152,26 +161,26 @@ struct SalaryView: View {
     }
     
     private var allowancesSection: some View {
-        SectionCard(title: "Allowances", icon: "plus.circle.fill", iconColor: .blue) {
-            VStack(spacing: 12) {
+        SectionCard(title: "Allowances", icon: "plus.circle", iconColor: DesignTokens.Color.primary) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 AllowanceRow(
-                    icon: "location.fill",
+                    icon: "location",
                     title: "Remote Location",
                     amount: viewModel.formatCurrency(viewModel.remoteAllowance)
                 )
                 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
                     HStack {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .frame(width: 20)
+                        Image(systemName: "star")
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                            .foregroundColor(DesignTokens.Color.primary)
+                            .frame(width: DesignTokens.Icon.large)
                         Text("Special Operations")
-                            .font(.body)
+                            .font(DesignTokens.Typography.body)
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.specialOperationsAllowance))
-                            .font(.body)
-                            .foregroundColor(.primary)
+                            .font(DesignTokens.Typography.body)
+                            .foregroundColor(DesignTokens.Color.textPrimary)
                     }
                     .frame(minHeight: minimumHitTarget)
                     
@@ -187,8 +196,17 @@ struct SalaryView: View {
                     .accessibilityLabel("Special Operations Percentage")
                 }
                 
+                // Housing Allowance - Only shown in December (annual payment)
+                if Calendar.current.component(.month, from: viewModel.selectedMonth) == 12 {
+                    AllowanceRow(
+                        icon: "house.fill",
+                        title: "Housing",
+                        amount: viewModel.formatCurrency(viewModel.housingAllowance)
+                    )
+                }
+                
                 AllowanceRow(
-                    icon: "car.fill",
+                    icon: "car",
                     title: "Transportation",
                     amount: viewModel.formatCurrency(viewModel.transportationAllowance)
                 )
@@ -197,15 +215,15 @@ struct SalaryView: View {
                 
                 HStack {
                     Image(systemName: "sum")
-                        .font(.body)
-                        .foregroundColor(.blue)
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.primary)
                     Text("Total Allowances")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     Spacer()
                     Text(viewModel.formatCurrency(viewModel.totalAllowances))
-                        .font(.headline)
-                        .foregroundColor(.blue)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.primary)
                 }
                 .frame(minHeight: minimumHitTarget)
             }
@@ -213,8 +231,8 @@ struct SalaryView: View {
     }
     
     private var overtimeSection: some View {
-        SectionCard(title: "Overtime", icon: "clock.fill", iconColor: .orange) {
-            VStack(spacing: 12) {
+        SectionCard(title: "Overtime", icon: "clock", iconColor: DesignTokens.Color.warning) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 OvertimeRow(
                     icon: "clock.badge.fill",
                     title: "Overtime Hours",
@@ -247,8 +265,8 @@ struct SalaryView: View {
     }
     
     private var deductionsSection: some View {
-        SectionCard(title: "Deductions", icon: "minus.circle.fill", iconColor: .red) {
-            VStack(spacing: 16) {
+        SectionCard(title: "Deductions", icon: "minus.circle", iconColor: DesignTokens.Color.error) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 // Home Loan with Slider
                 DeductionSliderRow(
                     icon: "house.fill",
@@ -298,13 +316,13 @@ struct SalaryView: View {
                 }
                 
                 DeductionRow(
-                    icon: "shield.fill",
+                    icon: "shield",
                     title: "GOSI",
                     amount: viewModel.formatCurrency(viewModel.gosiDeduction)
                 )
                 
                 DeductionRow(
-                    icon: "heart.fill",
+                    icon: "heart",
                     title: "SANID",
                     amount: viewModel.formatCurrency(viewModel.sanidDeduction)
                 )
@@ -312,24 +330,24 @@ struct SalaryView: View {
                 // Custom Deductions
                 if !viewModel.salaryBreakdown.customDeductions.isEmpty {
                     ForEach(viewModel.salaryBreakdown.customDeductions) { deduction in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                             HStack {
                                 Image(systemName: "minus.circle")
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                    .frame(width: 20)
+                                    .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                                    .foregroundColor(DesignTokens.Color.error)
+                                    .frame(width: DesignTokens.Icon.large)
                                 Text(deduction.entryDescription)
-                                    .font(.headline)
+                                    .font(DesignTokens.Typography.sectionTitle)
                                 Spacer()
                                 Text(viewModel.formatCurrency(deduction.amount))
-                                    .font(.body)
-                                    .foregroundColor(.red)
+                                    .font(DesignTokens.Typography.body)
+                                    .foregroundColor(DesignTokens.Color.error)
                             }
                             if let notes = deduction.notes, !notes.isEmpty {
                                 Text(notes)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 28)
+                                    .font(DesignTokens.Typography.caption)
+                                    .foregroundColor(DesignTokens.Color.textSecondary)
+                                    .padding(.leading, DesignTokens.Spacing.lg)
                             }
                         }
                         .frame(minHeight: minimumHitTarget)
@@ -340,15 +358,15 @@ struct SalaryView: View {
                 
                 HStack {
                     Image(systemName: "sum")
-                        .font(.body)
-                        .foregroundColor(.red)
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.error)
                     Text("Total Deductions")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     Spacer()
                     Text(viewModel.formatCurrency(viewModel.totalDeductions))
-                        .font(.headline)
-                        .foregroundColor(.red)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.error)
                 }
                 .frame(minHeight: minimumHitTarget)
             }
@@ -356,27 +374,27 @@ struct SalaryView: View {
     }
     
     private var additionalIncomeSection: some View {
-        SectionCard(title: "Additional Income", icon: "plus.circle.fill", iconColor: .green) {
-            VStack(spacing: 12) {
+        SectionCard(title: "Additional Income", icon: "plus.circle", iconColor: DesignTokens.Color.success) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 ForEach(viewModel.salaryBreakdown.additionalIncome) { income in
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                         HStack {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                                .frame(width: 20)
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                                .foregroundColor(DesignTokens.Color.success)
+                                .frame(width: DesignTokens.Icon.large)
                             Text(income.entryDescription)
-                                .font(.headline)
+                                .font(DesignTokens.Typography.sectionTitle)
                             Spacer()
                             Text(viewModel.formatCurrency(income.amount))
-                                .font(.body)
-                                .foregroundColor(.green)
+                                .font(DesignTokens.Typography.body)
+                                .foregroundColor(DesignTokens.Color.success)
                         }
                         if let notes = income.notes, !notes.isEmpty {
                             Text(notes)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.leading, 28)
+                                .font(DesignTokens.Typography.caption)
+                                .foregroundColor(DesignTokens.Color.textSecondary)
+                                .padding(.leading, DesignTokens.Spacing.lg)
                         }
                     }
                     .frame(minHeight: minimumHitTarget)
@@ -385,38 +403,100 @@ struct SalaryView: View {
         }
     }
     
-    private var summarySection: some View {
-        SectionCard(title: "Summary", icon: "chart.bar.fill", iconColor: .blue) {
-            VStack(spacing: 12) {
+    private func workScheduleSummarySection(summary: SalaryBreakdown.WorkScheduleSummary) -> some View {
+        SectionCard(title: "Work Schedule Summary", icon: "calendar.badge.clock", iconColor: DesignTokens.Color.primary) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 HStack {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.body)
-                        .foregroundColor(.blue)
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.primary)
+                    Text("Paid Hours")
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                    Spacer()
+                    Text(String(format: "%.1f", summary.paidHours))
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                }
+                .frame(minHeight: minimumHitTarget)
+                
+                HStack {
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.primary)
+                    Text("Paid Leave Hours")
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                    Spacer()
+                    Text(String(format: "%.1f", summary.paidLeaveHours))
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                }
+                .frame(minHeight: minimumHitTarget)
+                
+                HStack {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.primary)
+                    Text("Straight Time Hours")
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                    Spacer()
+                    Text(String(format: "%.1f", summary.straightTimeHours))
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                }
+                .frame(minHeight: minimumHitTarget)
+                
+                HStack {
+                    Image(systemName: "clock.badge.exclamationmark")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.warning)
+                    Text("Premium Hours")
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
+                    Spacer()
+                    Text(String(format: "%.1f", summary.premiumHours))
+                        .font(DesignTokens.Typography.body)
+                        .foregroundColor(DesignTokens.Color.warning)
+                }
+                .frame(minHeight: minimumHitTarget)
+            }
+        }
+    }
+    
+    private var summarySection: some View {
+        SectionCard(title: "Summary", icon: "chart.bar", iconColor: DesignTokens.Color.primary) {
+            VStack(spacing: DesignTokens.Spacing.md) {
+                HStack {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.primary)
                     Text("Total Compensation")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     Spacer()
                     Text(viewModel.formatCurrency(viewModel.totalCompensation))
-                        .font(.headline)
-                        .foregroundColor(.blue)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.primary)
                 }
                 .frame(minHeight: minimumHitTarget)
                 
                 Divider()
                 
                 HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.body)
-                        .foregroundColor(.green)
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                        .foregroundColor(DesignTokens.Color.success)
                     Text("Net Pay")
-                        .font(.title3)
+                        .font(DesignTokens.Typography.screenTitle)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     Spacer()
                     Text(viewModel.formatCurrency(viewModel.netPay))
-                        .font(.title2)
+                        .font(DesignTokens.Typography.screenTitle)
                         .fontWeight(.bold)
-                        .foregroundColor(.green)
+                        .foregroundColor(DesignTokens.Color.success)
                 }
                 .frame(minHeight: minimumHitTarget)
             }
@@ -453,7 +533,7 @@ struct SalaryView: View {
 
 // MARK: - Reusable Components
 
-/// Section card container following Apple Design Guidelines
+/// Section card container following Design System
 struct SectionCard<Content: View>: View {
     let title: String
     let icon: String
@@ -468,22 +548,22 @@ struct SectionCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+            HStack(spacing: DesignTokens.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.body)
+                    .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     .foregroundColor(iconColor)
                 Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                    .font(DesignTokens.Typography.sectionTitle)
+                    .foregroundColor(DesignTokens.Color.textPrimary)
             }
-            .padding(.bottom, 4)
+            .padding(.bottom, DesignTokens.Spacing.xs)
             
             content
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
+        .padding(DesignTokens.Spacing.md)
+        .background(DesignTokens.Color.surface)
+        .cornerRadius(DesignTokens.CornerRadius.large)
     }
 }
 
@@ -496,18 +576,18 @@ struct AllowanceRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .font(.caption)
-                .foregroundColor(.blue)
-                .frame(width: 20)
+                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                .foregroundColor(DesignTokens.Color.primary)
+                .frame(width: DesignTokens.Icon.large)
             Text(title)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.Color.textPrimary)
             Spacer()
             Text(amount)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.Color.textPrimary)
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: DesignTokens.Calendar.minCellSize)
     }
 }
 
@@ -521,18 +601,18 @@ struct OvertimeRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .font(.caption)
-                .foregroundColor(.orange)
-                .frame(width: 20)
+                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                .foregroundColor(DesignTokens.Color.warning)
+                .frame(width: DesignTokens.Icon.large)
             Text(title)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.Color.textPrimary)
             Spacer()
             Text(value)
-                .font(.body)
-                .foregroundColor(isAmount ? .orange : .secondary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(isAmount ? DesignTokens.Color.warning : DesignTokens.Color.textSecondary)
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: DesignTokens.Calendar.minCellSize)
         .accessibilityLabel(title)
         .accessibilityValue(value)
         .accessibilityHint(isAmount ? "Amount" : "Hours")
@@ -548,18 +628,18 @@ struct DeductionRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .font(.caption)
-                .foregroundColor(.red)
-                .frame(width: 20)
+                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                .foregroundColor(DesignTokens.Color.error)
+                .frame(width: DesignTokens.Icon.large)
             Text(title)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.Color.textPrimary)
             Spacer()
             Text(amount)
-                .font(.body)
-                .foregroundColor(.red)
+                .font(DesignTokens.Typography.body)
+                .foregroundColor(DesignTokens.Color.error)
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: DesignTokens.Calendar.minCellSize)
     }
 }
 
@@ -575,26 +655,26 @@ struct DeductionSliderRow: View {
     let onValueChange: (Double) -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
             HStack {
                 Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .frame(width: 20)
+                    .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
+                    .foregroundColor(DesignTokens.Color.error)
+                    .frame(width: DesignTokens.Icon.large)
                 Text(title)
-                    .font(.body)
-                    .foregroundColor(.primary)
+                    .font(DesignTokens.Typography.body)
+                    .foregroundColor(DesignTokens.Color.textPrimary)
                 Spacer()
                 Text(amount)
-                    .font(.headline)
-                    .foregroundColor(.red)
+                    .font(DesignTokens.Typography.sectionTitle)
+                    .foregroundColor(DesignTokens.Color.error)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: DesignTokens.Calendar.minCellSize)
             
-            HStack(spacing: 12) {
+            HStack(spacing: DesignTokens.Spacing.md) {
                 Text("\(Int(percentage))%")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundColor(DesignTokens.Color.textSecondary)
                     .frame(width: 50, alignment: .leading)
                     .accessibilityHidden(true)
                 
@@ -610,7 +690,7 @@ struct DeductionSliderRow: View {
                 .accessibilityValue("\(Int(percentage)) percent")
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, DesignTokens.Spacing.xs)
     }
 }
 

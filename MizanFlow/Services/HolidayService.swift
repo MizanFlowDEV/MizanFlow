@@ -27,20 +27,26 @@ class HolidayService {
     /// Eid al-Fitr dates by year (approximate - should be updated annually)
     private let eidFitrDates: [Int: (month: Int, startDay: Int, endDay: Int)] = [
         2025: (3, 30, 2),  // March 30 - April 2, 2025
+        2026: (3, 1, 7),   // March 1 - March 7, 2026
         // Add future years as needed
     ]
     
     /// Eid al-Adha dates by year (approximate - should be updated annually)
     private let eidAdhaDates: [Int: (month: Int, startDay: Int, endDay: Int)] = [
-        2025: (6, 5, 8),  // June 5-8, 2025
+        2025: (6, 5, 8),   // June 5-8, 2025
+        2026: (6, 21, 30), // June 21-30, 2026
         // Add future years as needed
     ]
     
     // MARK: - Ramadan Detection
     
     /// Ramadan dates by year
+    /// Format: (startMonth, startDay, endDay)
+    /// For single-month: endDay is in the same month (e.g., 2025: March 1-29)
+    /// For cross-month: endDay is in the next month (e.g., 2026: February 1 - March 4)
     private let ramadanDates: [Int: (month: Int, startDay: Int, endDay: Int)] = [
-        2025: (3, 1, 29),  // March 1 - March 29, 2025
+        2025: (3, 1, 29),  // March 1 - March 29, 2025 (single month)
+        2026: (2, 1, 4),   // February 1 - March 4, 2026 (cross-month: endDay is in next month)
         // Add future years as needed
     ]
     
@@ -64,11 +70,21 @@ class HolidayService {
         
         // Check Eid al-Fitr
         if let eidFitr = eidFitrDates[year] {
-            if month == eidFitr.month && day >= eidFitr.startDay {
-                return true
-            }
-            if month == eidFitr.month + 1 && day <= eidFitr.endDay {
-                return true
+            // If endDay < startDay, Eid spans two months (e.g., March 30 - April 2)
+            // Otherwise, Eid is in a single month (e.g., March 1-7)
+            if eidFitr.endDay < eidFitr.startDay {
+                // Cross-month: check start month from startDay, and next month up to endDay
+                if month == eidFitr.month && day >= eidFitr.startDay {
+                    return true
+                }
+                if month == eidFitr.month + 1 && day <= eidFitr.endDay {
+                    return true
+                }
+            } else {
+                // Same month: check only the start month from startDay to endDay
+                if month == eidFitr.month && day >= eidFitr.startDay && day <= eidFitr.endDay {
+                    return true
+                }
             }
         }
         
@@ -121,8 +137,21 @@ class HolidayService {
         }
         
         if let ramadan = ramadanDates[year] {
-            if month == ramadan.month && day >= ramadan.startDay && day <= ramadan.endDay {
-                return true
+            // Check if date is in the start month
+            if month == ramadan.month {
+                // If endDay is small (<= 15), Ramadan likely spans two months
+                // So include all days from startDay to end of month
+                if ramadan.endDay <= 15 {
+                    return day >= ramadan.startDay
+                } else {
+                    // Single month: check if day is within range
+                    return day >= ramadan.startDay && day <= ramadan.endDay
+                }
+            }
+            // Check if date is in the next month (for cross-month Ramadan)
+            // Only check if endDay is small, indicating cross-month
+            if month == ramadan.month + 1 && ramadan.endDay <= 15 {
+                return day <= ramadan.endDay
             }
         }
         

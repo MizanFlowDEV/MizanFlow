@@ -18,7 +18,9 @@ struct BudgetView: View {
                 // Month Selector
                 Section(header: HStack {
                     Image(systemName: "calendar")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     Text("Month")
+                        .font(DesignTokens.Typography.sectionTitle)
                 }) {
                     Button(action: {
                         // Add haptic feedback
@@ -29,14 +31,16 @@ struct BudgetView: View {
                     }) {
                         HStack {
                             Text("Select Month")
+                                .font(DesignTokens.Typography.body)
                             Spacer()
                             Text(viewModel.formatMonth(viewModel.selectedMonth))
-                                .foregroundColor(.secondary)
+                                .font(DesignTokens.Typography.body)
+                                .foregroundColor(DesignTokens.Color.textSecondary)
                             Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
+                                .font(.system(size: DesignTokens.Icon.small, weight: DesignTokens.Icon.weight))
+                                .foregroundColor(DesignTokens.Color.textSecondary)
                         }
-                        .frame(minHeight: 44)
+                        .frame(minHeight: DesignTokens.Calendar.minCellSize)
                     }
                     .accessibilityLabel("Select Month")
                     .accessibilityHint("Tap to choose a different month")
@@ -44,9 +48,11 @@ struct BudgetView: View {
                 
                 // Income Section
                 Section(header: HStack {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .foregroundColor(.green)
+                    Image(systemName: "arrow.down.circle")
+                        .foregroundColor(DesignTokens.Color.success)
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     Text("Income")
+                        .font(DesignTokens.Typography.sectionTitle)
                 }) {
                     ForEach(viewModel.entriesForMonth.filter { $0.isIncome }) { entry in
                         BudgetEntryRow(entry: entry, viewModel: viewModel)
@@ -54,22 +60,27 @@ struct BudgetView: View {
                     
                     HStack {
                         Image(systemName: "sum")
-                            .foregroundColor(.green)
+                            .foregroundColor(DesignTokens.Color.success)
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                         Text("Total Income")
-                            .bold()
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .fontWeight(.semibold)
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.totalIncome))
-                            .bold()
-                            .foregroundColor(.green)
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .fontWeight(.semibold)
+                            .foregroundColor(DesignTokens.Color.success)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DesignTokens.Calendar.minCellSize)
                 }
                 
                 // Expenses Section
                 Section(header: HStack {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .foregroundColor(.red)
+                    Image(systemName: "arrow.up.circle")
+                        .foregroundColor(DesignTokens.Color.error)
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     Text("Expenses")
+                        .font(DesignTokens.Typography.sectionTitle)
                 }) {
                     ForEach(viewModel.entriesForMonth.filter { !$0.isIncome }) { entry in
                         BudgetEntryRow(entry: entry, viewModel: viewModel)
@@ -77,45 +88,52 @@ struct BudgetView: View {
                     
                     HStack {
                         Image(systemName: "sum")
-                            .foregroundColor(.red)
+                            .foregroundColor(DesignTokens.Color.error)
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                         Text("Total Expenses")
-                            .bold()
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .fontWeight(.semibold)
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.totalExpenses))
-                            .bold()
-                            .foregroundColor(.red)
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .fontWeight(.semibold)
+                            .foregroundColor(DesignTokens.Color.error)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DesignTokens.Calendar.minCellSize)
                 }
                 
                 // Summary Section
                 Section(header: HStack {
-                    Image(systemName: "chart.bar.fill")
+                    Image(systemName: "chart.bar")
+                        .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                     Text("Summary")
+                        .font(DesignTokens.Typography.sectionTitle)
                 }) {
                     HStack {
-                        Image(systemName: "dollarsign.circle.fill")
-                            .foregroundColor(viewModel.netBalance >= 0 ? .green : .red)
+                        Image(systemName: "dollarsign.circle")
+                            .foregroundColor(viewModel.netBalance >= 0 ? DesignTokens.Color.success : DesignTokens.Color.error)
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                         Text("Net Balance")
-                            .font(.headline)
+                            .font(DesignTokens.Typography.sectionTitle)
                         Spacer()
                         Text(viewModel.formatCurrency(viewModel.netBalance))
-                            .font(.headline)
-                            .foregroundColor(viewModel.netBalance >= 0 ? .green : .red)
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .foregroundColor(viewModel.netBalance >= 0 ? DesignTokens.Color.success : DesignTokens.Color.error)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DesignTokens.Calendar.minCellSize)
                     
                     HStack {
                         Image(systemName: "percent")
-                            .foregroundColor(viewModel.savingsRate >= 0 ? .green : .red)
+                            .foregroundColor(viewModel.savingsRate >= 0 ? DesignTokens.Color.success : DesignTokens.Color.error)
+                            .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                         Text("Savings Rate")
-                            .font(.headline)
+                            .font(DesignTokens.Typography.sectionTitle)
                         Spacer()
                         Text(viewModel.formatPercentage(viewModel.savingsRate))
-                            .font(.headline)
-                            .foregroundColor(viewModel.savingsRate >= 0 ? .green : .red)
+                            .font(DesignTokens.Typography.sectionTitle)
+                            .foregroundColor(viewModel.savingsRate >= 0 ? DesignTokens.Color.success : DesignTokens.Color.error)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: DesignTokens.Calendar.minCellSize)
                 }
                 
                 // Category Breakdown
@@ -124,14 +142,18 @@ struct BudgetView: View {
                         ForEach(viewModel.categoryBreakdown, id: \.category) { breakdown in
                             HStack {
                                 Text(breakdown.category)
+                                    .font(DesignTokens.Typography.body)
                                 Spacer()
                                 Text(viewModel.formatCurrency(breakdown.amount))
+                                    .font(DesignTokens.Typography.body)
                                 Text("(\(viewModel.formatPercentage(breakdown.percentage)))")
-                                    .foregroundColor(.secondary)
+                                    .font(DesignTokens.Typography.caption)
+                                    .foregroundColor(DesignTokens.Color.textSecondary)
                             }
                         }
                     } header: {
                         Text("Category Breakdown")
+                            .font(DesignTokens.Typography.sectionTitle)
                     }
                 }
             }
@@ -151,8 +173,8 @@ struct BudgetView: View {
                         impactFeedback.impactOccurred()
                         viewModel.showingAddEntrySheet = true
                     }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: DesignTokens.Icon.large, weight: DesignTokens.Icon.weight))
                     }
                     .accessibilityLabel("Add Budget Entry")
                     .accessibilityHint("Tap to add a new income or expense entry")
@@ -190,29 +212,29 @@ struct BudgetEntryRow: View {
             impactFeedback.impactOccurred()
             showingEditSheet = true
         }) {
-            HStack(spacing: 12) {
-                Image(systemName: entry.isIncome ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                    .foregroundColor(entry.isIncome ? .green : .red)
-                    .font(.title3)
+            HStack(spacing: DesignTokens.Spacing.md) {
+                Image(systemName: entry.isIncome ? "arrow.down.circle" : "arrow.up.circle")
+                    .foregroundColor(entry.isIncome ? DesignTokens.Color.success : DesignTokens.Color.error)
+                    .font(.system(size: DesignTokens.Icon.large, weight: DesignTokens.Icon.weight))
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                     Text(entry.entryDescription)
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(DesignTokens.Typography.sectionTitle)
+                        .foregroundColor(DesignTokens.Color.textPrimary)
                     if let notes = entry.notes {
                         Text(notes)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
                     }
                 }
                 
                 Spacer()
                 
                 Text(viewModel.formatCurrency(entry.amount))
-                    .foregroundColor(entry.isIncome ? .green : .red)
-                    .font(.headline)
+                    .foregroundColor(entry.isIncome ? DesignTokens.Color.success : DesignTokens.Color.error)
+                    .font(DesignTokens.Typography.sectionTitle)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: DesignTokens.Calendar.minCellSize)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -40,7 +40,7 @@ struct MonthYearPicker: View {
             }
         }
         .frame(height: 200)
-        .padding()
+        .padding(DesignTokens.Spacing.md)
     }
     
     private func monthName(_ month: Int) -> String {

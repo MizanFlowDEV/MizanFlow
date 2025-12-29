@@ -16,15 +16,15 @@ struct ScheduleView: View {
         NavigationView {
             VStack(spacing: 0) {
                 // Top bar with Hitch Start Date button
-                HStack(spacing: 12) {
+                HStack(spacing: DesignTokens.Spacing.md) {
                     Button(action: {
                         HapticFeedback.buttonTap()
                         showingHitchStartPicker = true
                     }) {
                         Label(NSLocalizedString("Set Hitch Start Date", comment: "Set hitch start date button"), systemImage: "calendar.badge.plus")
-                            .font(.subheadline)
-                            .frame(minHeight: 44)
-                            .padding(.horizontal, 12)
+                            .font(DesignTokens.Typography.caption)
+                            .frame(minHeight: DesignTokens.Calendar.minCellSize)
+                            .padding(.horizontal, DesignTokens.Spacing.md)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
@@ -35,21 +35,21 @@ struct ScheduleView: View {
                     
                     // Show current hitch pattern
                     if viewModel.hitchStartDate != nil {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                                .font(.caption)
+                        HStack(spacing: DesignTokens.Spacing.xs) {
+                            Image(systemName: "checkmark.circle")
+                                .foregroundColor(DesignTokens.Color.success)
+                                .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                             Text("14/7 Hitch")
-                                .font(.subheadline)
+                                .font(DesignTokens.Typography.caption)
                                 .fontWeight(.medium)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(8)
+                        .padding(.horizontal, DesignTokens.Spacing.md)
+                        .padding(.vertical, DesignTokens.Spacing.sm)
+                        .background(DesignTokens.Color.success.opacity(0.15))
+                        .cornerRadius(DesignTokens.CornerRadius.medium)
                     }
                 }
-                .padding([.top, .horizontal])
+                .padding([.top, .horizontal], DesignTokens.Spacing.md)
                 
                 // Month selector
                 HStack {
@@ -58,9 +58,9 @@ struct ScheduleView: View {
                         previousMonth()
                     }) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.primary)
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
+                            .foregroundColor(DesignTokens.Color.textPrimary)
+                            .font(.system(size: DesignTokens.Icon.large, weight: DesignTokens.Icon.weight))
+                            .frame(width: DesignTokens.Calendar.minCellSize, height: DesignTokens.Calendar.minCellSize)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel(NSLocalizedString("Previous month", comment: "Previous month button"))
@@ -69,8 +69,7 @@ struct ScheduleView: View {
                     Spacer()
                     
                     Text(viewModel.getMonthString(viewModel.selectedDate))
-                        .font(.title2)
-                        .bold()
+                        .font(DesignTokens.Typography.screenTitle)
                         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .accessibilityAddTraits(.isHeader)
                     
@@ -81,35 +80,41 @@ struct ScheduleView: View {
                         nextMonth()
                     }) {
                         Image(systemName: "chevron.right")
-                            .foregroundColor(.primary)
-                            .font(.title3)
-                            .frame(width: 44, height: 44)
+                            .foregroundColor(DesignTokens.Color.textPrimary)
+                            .font(.system(size: DesignTokens.Icon.large, weight: DesignTokens.Icon.weight))
+                            .frame(width: DesignTokens.Calendar.minCellSize, height: DesignTokens.Calendar.minCellSize)
                             .contentShape(Rectangle())
                     }
                     .accessibilityLabel(NSLocalizedString("Next month", comment: "Next month button"))
                     .accessibilityHint(NSLocalizedString("Tap to view the next month", comment: ""))
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
+                .padding(.horizontal, DesignTokens.Spacing.md)
+                .padding(.top, DesignTokens.Spacing.sm)
                 
                 // Weekday headers
                 HStack {
                     ForEach(viewModel.getWeekdaySymbols(), id: \.self) { symbol in
                         Text(symbol)
-                            .font(.caption)
-                            .fontWeight(.bold)
+                            .font(DesignTokens.Typography.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, DesignTokens.Spacing.md)
+                .padding(.vertical, DesignTokens.Spacing.sm)
                 
                 // Calendar grid (always 6 rows)
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 8) {
+                    LazyVGrid(columns: columns, spacing: DesignTokens.Calendar.cellSpacing) {
                         ForEach(getCalendarGrid(), id: \.id) { cell in
                             if let day = cell.day {
-                                DayCell(day: day, isOverride: viewModel.isOverride(for: day.date))
+                                DayCell(
+                                    day: day,
+                                    isOverride: viewModel.isOverride(for: day.date),
+                                    isSelected: Calendar.current.isDate(day.date, inSameDayAs: viewModel.selectedDate),
+                                    isToday: Calendar.current.isDateInToday(day.date)
+                                )
                                     .onTapGesture {
                                         HapticFeedback.dateSelection()
                                         viewModel.selectedDate = day.date
@@ -128,14 +133,14 @@ struct ScheduleView: View {
                             }
                         }
                     }
-                    .padding()
+                    .padding(DesignTokens.Spacing.md)
                     .id(calendarRefreshToggle) // Force grid to refresh when this value changes
                 }
                 
                 // Legend
                 calendarLegend
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, DesignTokens.Spacing.md)
+                    .padding(.bottom, DesignTokens.Spacing.sm)
             }
             .navigationTitle("Schedule")
             .toolbar {
@@ -183,20 +188,20 @@ struct ScheduleView: View {
                     VStack {
                         HStack {
                             Text("Set Hitch Start Date")
-                                .font(.headline)
-                                .padding()
+                                .font(DesignTokens.Typography.sectionTitle)
+                                .padding(DesignTokens.Spacing.md)
                             Spacer()
                         }
                         
                         Text("This will generate a 14/7 hitch pattern starting from this date.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundColor(DesignTokens.Color.textSecondary)
+                            .padding(.horizontal, DesignTokens.Spacing.md)
                         
                         DatePicker("", selection: $hitchStartDate, displayedComponents: .date)
                             .datePickerStyle(.wheel)
                             .labelsHidden()
-                            .padding()
+                            .padding(DesignTokens.Spacing.md)
                         
                         Spacer()
                         
@@ -205,20 +210,17 @@ struct ScheduleView: View {
                             showingHitchStartPicker = false
                         }) {
                             Text("Done")
-                                .fontWeight(.bold)
+                                .font(DesignTokens.Typography.body)
+                                .fontWeight(.semibold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(10)
+                                .padding(DesignTokens.Spacing.md)
+                                .background(DesignTokens.Color.primary)
+                                .cornerRadius(DesignTokens.CornerRadius.large)
                         }
-                        .padding()
+                        .padding(DesignTokens.Spacing.md)
                     }
                     .navigationTitle("Set Hitch Start Date")
-                    .navigationBarItems(trailing: Button("Done") {
-                        viewModel.setHitchStartDate(hitchStartDate)
-                        showingHitchStartPicker = false
-                    })
                 }
             }
             .sheet(isPresented: $viewModel.showingDayDetail) {
@@ -250,12 +252,8 @@ struct ScheduleView: View {
                     message: Text("Are you sure you want to remove this interruption? Your schedule will be restored to its original pattern."),
                     primaryButton: .destructive(Text("Remove")) {
                         viewModel.removeCurrentInterruption()
-                        // Force view to update by slightly delaying the state update
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            // This will ensure the view refreshes completely
-                            viewModel.objectWillChange.send()
-                            calendarRefreshToggle.toggle() // Force calendar grid to refresh
-                        }
+                        // Force calendar grid to refresh (SwiftUI will automatically update via @Published properties)
+                        calendarRefreshToggle.toggle()
                     },
                     secondaryButton: .cancel()
                 )
@@ -315,9 +313,12 @@ struct ScheduleView: View {
         }
 
         // Add trailing days from next month (only those in the last week)
+        // Note: totalDaysInMonth - 1 is correct because we're 0-indexed (day 1 = offset 0, day N = offset N-1)
+        // This calculates the last day of the current month
         if let lastDayOfMonth = calendar.date(byAdding: DateComponents(day: totalDaysInMonth - 1), to: firstDayOfMonth) {
             let lastWeekday = calendar.component(.weekday, from: lastDayOfMonth)
             if lastWeekday < 7 {
+                // Add days from next month to complete the last week (up to 6 days)
                 for i in 1...(7 - lastWeekday) {
                     if let date = calendar.date(byAdding: .day, value: i, to: lastDayOfMonth) {
                         createAndAddCalendarCell(for: date, to: &grid)
@@ -408,19 +409,18 @@ struct ScheduleView: View {
         let legendOrder: [DayType] = [
             .workday, .earnedOffDay, .vacation, .training, .eidHoliday, .nationalDay, .foundingDay, .autoRescheduled, .companyOff, .manualOverride, .ramadan
         ]
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
             Text(NSLocalizedString("14/7 Hitch Pattern", comment: ""))
-                .font(.caption)
-                .fontWeight(.bold)
-                .padding(.bottom, 2)
+                .font(DesignTokens.Typography.sectionTitle)
+                .padding(.bottom, DesignTokens.Spacing.xs)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: DesignTokens.Spacing.md) {
                     ForEach(legendOrder, id: \.self) { type in
-                        legendItem(color: color(for: type), label: NSLocalizedString(type.description, comment: ""))
+                        legendItem(type: type)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, DesignTokens.Spacing.sm)
             }
             
             if viewModel.schedule.isInterrupted {
@@ -429,26 +429,21 @@ struct ScheduleView: View {
         }
     }
     
-    // Helper to get the color for a given DayType (matches DayCell)
-    private func color(for type: DayType) -> Color {
-        return ColorTheme.legendColor(for: type)
-    }
-    
     // Interruption indicator for active interruptions
     private var interruptionIndicator: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
             Divider()
-                .padding(.vertical, 4)
+                .padding(.vertical, DesignTokens.Spacing.xs)
             
             HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .font(.caption)
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(DesignTokens.Color.warning)
+                    .font(.system(size: DesignTokens.Icon.medium, weight: DesignTokens.Icon.weight))
                 
                 Text("Active Interruption")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
+                    .font(DesignTokens.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DesignTokens.Color.warning)
             }
             
             if let start = viewModel.schedule.interruptionStart,
@@ -456,18 +451,18 @@ struct ScheduleView: View {
                let type = viewModel.schedule.interruptionType {
                 
                 Text("\(type.rawValue.capitalized): \(formatDate(start)) - \(formatDate(end))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundColor(DesignTokens.Color.textSecondary)
             }
             
             if viewModel.schedule.manuallyAdjusted {
                 Text("Manual override detected")
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .padding(.top, 4)
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundColor(DesignTokens.Color.error)
+                    .padding(.top, DesignTokens.Spacing.xs)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, DesignTokens.Spacing.xs)
     }
     
     // Date formatter helper
@@ -475,13 +470,31 @@ struct ScheduleView: View {
         return FormattingUtilities.formatShortDate(date)
     }
     
-    private func legendItem(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(color)
-                .frame(width: 16, height: 16)
-            Text(label)
-                .font(.caption)
+    // Legend item matching simplified cell design (background + indicator)
+    private func legendItem(type: DayType) -> some View {
+        HStack(spacing: DesignTokens.Spacing.xs) {
+            // Mini cell representation
+            ZStack {
+                ColorTheme.backgroundColor(for: type)
+                    .cornerRadius(DesignTokens.CornerRadius.small)
+                    .frame(width: 24, height: 24)
+                
+                // Indicator (dot + bar)
+                HStack(spacing: 1) {
+                    Circle()
+                        .fill(ColorTheme.indicatorColor(for: type))
+                        .frame(width: 3, height: 3)
+                    
+                    RoundedRectangle(cornerRadius: 0.5)
+                        .fill(ColorTheme.indicatorColor(for: type))
+                        .frame(width: 8, height: 1)
+                }
+                .offset(y: 6)
+            }
+            
+            Text(NSLocalizedString(type.description, comment: ""))
+                .font(DesignTokens.Typography.caption)
+                .foregroundColor(DesignTokens.Color.textPrimary)
         }
     }
     
@@ -493,106 +506,94 @@ struct ScheduleView: View {
 struct DayCell: View {
     let day: WorkSchedule.ScheduleDay
     let isOverride: Bool
+    let isSelected: Bool
+    let isToday: Bool
     
     var body: some View {
         ZStack {
+            // Background with subtle tint
             backgroundColor
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isOverride ? Color.red : Color.gray.opacity(0.2), lineWidth: isOverride ? 2 : 1)
-                )
+                .cornerRadius(DesignTokens.CornerRadius.medium)
             
-            VStack(spacing: 2) {
+            // Border for today/selected/override states
+            RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.medium)
+                .stroke(borderColor, lineWidth: borderWidth)
+            
+            VStack(spacing: DesignTokens.Spacing.xs) {
+                // Day number
                 Text("\(Calendar.current.component(.day, from: day.date))")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(DesignTokens.Typography.body)
+                    .fontWeight(.medium)
                     .foregroundColor(textColor)
                 
-                // Only show day label if the day is in a hitch or has special status
-                if shouldShowDayLabel {
-                    Text(dayLabel)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
+                Spacer()
                 
-                if day.hasIcon, let iconName = day.iconName {
-                    Image(systemName: iconName)
-                        .font(.system(size: 10))
-                        .foregroundColor(.primary.opacity(0.7))
-                }
-                
-                if isOverride {
-                    Rectangle()
-                        .fill(Color.red)
-                        .frame(width: 20, height: 2)
+                // Status indicator (dot + bar combination)
+                if !isPlaceholder {
+                    HStack(spacing: 2) {
+                        // Small dot indicator
+                        Circle()
+                            .fill(indicatorColor)
+                            .frame(width: DesignTokens.Calendar.indicatorSize, height: DesignTokens.Calendar.indicatorSize)
+                        
+                        // Thin bar indicator
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(indicatorColor)
+                            .frame(height: DesignTokens.Calendar.indicatorBarHeight)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, DesignTokens.Spacing.xs)
+                    .padding(.bottom, DesignTokens.Spacing.xs)
                 }
             }
-            .padding(.vertical, 2)
+            .padding(DesignTokens.Spacing.xs)
         }
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .frame(maxWidth: .infinity, minHeight: DesignTokens.Calendar.minCellSize)
         .aspectRatio(1, contentMode: .fit)
-        .contentShape(Rectangle()) // Make entire cell tappable
+        .contentShape(Rectangle())
     }
     
-    private var shouldShowDayLabel: Bool {
-        // Pre-hitch placeholders: never show labels
-        if day.isPlaceholder == true { return false }
-        
-        // Special days (holidays): always show labels
-        if isSpecialDayType { return true }
-        
-        // Days in active hitch: always show labels
-        if day.isInHitch { return true }
-        
-        // Off days after hitch start: show labels
-        if day.type == .earnedOffDay || day.type == .companyOff { return true }
-        
-        // Default: show labels for all other days
-        return true
-    }
-    
-    private var isSpecialDayType: Bool {
-        switch day.type {
-        case .vacation, .training, .eidHoliday, .nationalDay, .foundingDay, .autoRescheduled, .manualOverride, .ramadan:
-            return true
-        case .workday, .earnedOffDay, .companyOff:
-            return false
-        }
+    private var isPlaceholder: Bool {
+        day.isPlaceholder == true
     }
     
     private var backgroundColor: Color {
-        // Pre-hitch placeholders: clear background
-        if day.isPlaceholder == true { return Color.clear }
-        
+        if isPlaceholder {
+            return Color.clear
+        }
         return ColorTheme.backgroundColor(for: day.type)
     }
     
     private var textColor: Color {
+        if isPlaceholder {
+            return DesignTokens.Color.textSecondary
+        }
         return ColorTheme.textColor(for: day.type)
     }
     
-    private var dayLabel: String {
-        switch day.type {
-        case .workday:
-            return NSLocalizedString("Work", comment: "")
-        case .earnedOffDay, .companyOff:
-            return NSLocalizedString("Off", comment: "")
-        case .vacation:
-            return NSLocalizedString("Vacation", comment: "")
-        case .training:
-            return NSLocalizedString("Training", comment: "")
-        case .eidHoliday:
-            return NSLocalizedString("Eid Holiday", comment: "")
-        case .nationalDay:
-            return NSLocalizedString("National Day", comment: "")
-        case .foundingDay:
-            return NSLocalizedString("Founding Day", comment: "")
-        case .autoRescheduled:
-            return NSLocalizedString("Rescheduled Day", comment: "")
-        case .manualOverride:
-            return NSLocalizedString("Manual Override", comment: "")
-        case .ramadan:
-            return NSLocalizedString("Ramadan", comment: "")
+    private var indicatorColor: Color {
+        if isOverride {
+            return DesignTokens.Color.override
         }
+        return ColorTheme.indicatorColor(for: day.type)
+    }
+    
+    private var borderColor: Color {
+        if isOverride {
+            return DesignTokens.Color.override
+        } else if isToday {
+            return DesignTokens.Color.primary
+        } else if isSelected {
+            return DesignTokens.Color.primary.opacity(0.5)
+        } else {
+            return DesignTokens.Color.separator.opacity(0.3)
+        }
+    }
+    
+    private var borderWidth: CGFloat {
+        if isOverride || isToday || isSelected {
+            return DesignTokens.Calendar.borderWidth
+        }
+        return 1
     }
 } 
